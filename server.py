@@ -406,39 +406,116 @@ Keep it conversational and do not worry too much about policies."""
   <div class="ws">
     <p class="lbl" style="margin-bottom:12px;">Live regression example</p>
     <h2 style="font-size:32px;font-weight:700;letter-spacing:-1px;margin-bottom:10px;">The prompt got "warmer". Three contracts broke.</h2>
-    <p style="font-size:16px;color:var(--t2);max-width:520px;margin-bottom:36px;">ShopEasy's refund agent was updated to sound more empathetic. AgentProof caught 3 critical regressions before deployment.</p>
+    <p style="font-size:16px;color:var(--t2);max-width:560px;margin-bottom:36px;">A wording change to "be more empathetic" silently broke 3 critical behavioral contracts. Below is what AgentProof actually shows — real contract IDs, LLM reasoning, and confidence scores.</p>
 
-    <div style="border:1px solid var(--br);border-radius:10px;overflow:hidden;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;">
-        <div style="padding:28px;border-right:1px solid var(--br);">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
-            <span style="width:6px;height:6px;background:var(--gr);border-radius:50%;display:inline-block;"></span>
-            <span style="font-size:11px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:1px;">V1 — Baseline · 4/4 passing</span>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+
+      <!-- V1 RUN CARD -->
+      <div style="border:1px solid #1f3d29;border-radius:10px;overflow:hidden;">
+        <div style="padding:12px 18px;background:rgba(34,197,94,.07);border-bottom:1px solid #1f3d29;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="width:6px;height:6px;background:var(--gr);border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+            <span style="font-size:13px;font-weight:700;color:var(--t1);">Version 1 &nbsp;<span style="color:var(--t3);font-weight:400;">baseline</span></span>
           </div>
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Confirms refund eligibility</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Cites Return Policy Section 3.1</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Resolves request directly, no handoff</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Response under 100 words</span></div>
-          </div>
+          <span style="font-size:11px;font-weight:700;color:var(--gr);background:rgba(34,197,94,.14);padding:2px 9px;border-radius:4px;font-family:var(--mono);">PASSED</span>
         </div>
-        <div style="padding:28px;background:rgba(239,68,68,.03);">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
-            <span style="width:6px;height:6px;background:var(--rd);border-radius:50%;display:inline-block;"></span>
-            <span style="font-size:11px;font-weight:700;color:var(--rd);text-transform:uppercase;letter-spacing:1px;">V2 — 3 regressions detected</span>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="cx">✗</span><span style="font-size:13.5px;color:var(--t2);">No mention of refund eligibility</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="cx">✗</span><span style="font-size:13.5px;color:var(--t2);">Policy never referenced</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="cx">✗</span><span style="font-size:13.5px;color:var(--t2);">Tells customer to contact support team</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Still sounds warm and friendly</span></div>
+        <div style="padding:12px 18px;border-bottom:1px solid var(--br);background:var(--bg2);">
+          <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Agent Response</div>
+          <div style="font-size:12px;color:var(--t2);font-family:var(--mono);line-height:1.6;">"You're eligible for a refund — purchases within 30 days qualify per Return Policy Section 3.1. I'll process this for you right now."</div>
+        </div>
+        <div style="padding:10px 18px;">
+          <div style="display:flex;flex-direction:column;gap:0;">
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--br);">
+              <span style="color:var(--gr);font-weight:700;font-size:13px;flex-shrink:0;">✓</span>
+              <span style="font-size:12px;color:var(--t2);font-family:var(--mono);flex:1;">refund_eligibility_confirmed</span>
+              <span style="font-size:10.5px;color:var(--t3);font-family:var(--mono);margin-left:auto;">97%</span>
+              <span style="font-size:10px;font-weight:700;color:var(--t3);background:var(--bg3);padding:1px 6px;border-radius:3px;flex-shrink:0;">CRITICAL</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--br);">
+              <span style="color:var(--gr);font-weight:700;font-size:13px;flex-shrink:0;">✓</span>
+              <span style="font-size:12px;color:var(--t2);font-family:var(--mono);flex:1;">policy_citation_required</span>
+              <span style="font-size:10.5px;color:var(--t3);font-family:var(--mono);margin-left:auto;">94%</span>
+              <span style="font-size:10px;font-weight:700;color:var(--t3);background:var(--bg3);padding:1px 6px;border-radius:3px;flex-shrink:0;">CRITICAL</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--br);">
+              <span style="color:var(--gr);font-weight:700;font-size:13px;flex-shrink:0;">✓</span>
+              <span style="font-size:12px;color:var(--t2);font-family:var(--mono);flex:1;">no_support_redirect</span>
+              <span style="font-size:10.5px;color:var(--t3);font-family:var(--mono);margin-left:auto;">91%</span>
+              <span style="font-size:10px;font-weight:700;color:var(--t3);background:var(--bg3);padding:1px 6px;border-radius:3px;flex-shrink:0;">CRITICAL</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 0;">
+              <span style="color:var(--gr);font-weight:700;font-size:13px;flex-shrink:0;">✓</span>
+              <span style="font-size:12px;color:var(--t2);font-family:var(--mono);flex:1;">response_length_limit</span>
+              <span style="font-size:10.5px;color:var(--t3);font-family:var(--mono);margin-left:auto;">96%</span>
+              <span style="font-size:10px;font-weight:700;color:var(--t3);background:var(--bg3);padding:1px 6px;border-radius:3px;flex-shrink:0;">HIGH</span>
+            </div>
           </div>
         </div>
       </div>
-      <div style="padding:11px 28px;background:var(--bg2);border-top:1px solid var(--br);display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-family:var(--mono);font-size:12px;color:var(--t3);">drift_score: <span style="color:var(--rd);">0.750</span> &nbsp;·&nbsp; status: <span style="color:var(--rd);">FAILED</span> &nbsp;·&nbsp; regressions: <span style="color:var(--rd);">2_critical</span></span>
-        <a href="/dashboard" style="font-size:13px;color:var(--or);font-weight:600;">View report →</a>
+
+      <!-- V2 RUN CARD -->
+      <div style="border:1px solid #3d1f1f;border-radius:10px;overflow:hidden;">
+        <div style="padding:12px 18px;background:rgba(239,68,68,.08);border-bottom:1px solid #3d1f1f;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="width:6px;height:6px;background:var(--rd);border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+            <span style="font-size:13px;font-weight:700;color:var(--t1);">Version 2 &nbsp;<span style="color:var(--t3);font-weight:400;">updated prompt</span></span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:var(--rd);background:rgba(239,68,68,.14);padding:2px 9px;border-radius:4px;font-family:var(--mono);">FAILED</span>
+        </div>
+        <div style="padding:12px 18px;border-bottom:1px solid var(--br);background:var(--bg2);">
+          <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Agent Response</div>
+          <div style="font-size:12px;color:var(--t2);font-family:var(--mono);line-height:1.6;">"I completely understand your frustration! Our support team would love to help — feel free to reach out and they'll sort this out for you!"</div>
+        </div>
+        <div style="padding:10px 18px;">
+          <div style="display:flex;flex-direction:column;gap:0;">
+            <div style="padding:9px 0;border-bottom:1px solid var(--br);">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                <span style="color:var(--rd);font-weight:700;font-size:13px;flex-shrink:0;">✗</span>
+                <span style="font-size:12px;color:var(--t1);font-family:var(--mono);flex:1;">refund_eligibility_confirmed</span>
+                <span style="font-size:10.5px;color:var(--rd);font-family:var(--mono);margin-left:auto;">88%</span>
+                <span style="font-size:10px;font-weight:700;color:var(--rd);background:rgba(239,68,68,.12);padding:1px 6px;border-radius:3px;flex-shrink:0;">CRITICAL</span>
+              </div>
+              <div style="font-size:11.5px;color:var(--t3);padding-left:21px;line-height:1.5;">"No confirmation of refund eligibility provided. Response focuses on emotional support rather than actionable policy."</div>
+            </div>
+            <div style="padding:9px 0;border-bottom:1px solid var(--br);">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                <span style="color:var(--rd);font-weight:700;font-size:13px;flex-shrink:0;">✗</span>
+                <span style="font-size:12px;color:var(--t1);font-family:var(--mono);flex:1;">policy_citation_required</span>
+                <span style="font-size:10.5px;color:var(--rd);font-family:var(--mono);margin-left:auto;">91%</span>
+                <span style="font-size:10px;font-weight:700;color:var(--rd);background:rgba(239,68,68,.12);padding:1px 6px;border-radius:3px;flex-shrink:0;">CRITICAL</span>
+              </div>
+              <div style="font-size:11.5px;color:var(--t3);padding-left:21px;line-height:1.5;">"Return Policy Section 3.1 is not mentioned. No policy cited at any point in the response."</div>
+            </div>
+            <div style="padding:9px 0;border-bottom:1px solid var(--br);">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                <span style="color:var(--rd);font-weight:700;font-size:13px;flex-shrink:0;">✗</span>
+                <span style="font-size:12px;color:var(--t1);font-family:var(--mono);flex:1;">no_support_redirect</span>
+                <span style="font-size:10.5px;color:var(--rd);font-family:var(--mono);margin-left:auto;">87%</span>
+                <span style="font-size:10px;font-weight:700;color:var(--rd);background:rgba(239,68,68,.12);padding:1px 6px;border-radius:3px;flex-shrink:0;">CRITICAL</span>
+              </div>
+              <div style="font-size:11.5px;color:var(--t3);padding-left:21px;line-height:1.5;">"Agent explicitly directs customer to 'reach out to support team' — direct violation of no-handoff contract."</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 0;">
+              <span style="color:var(--gr);font-weight:700;font-size:13px;flex-shrink:0;">✓</span>
+              <span style="font-size:12px;color:var(--t2);font-family:var(--mono);flex:1;">response_length_limit</span>
+              <span style="font-size:10.5px;color:var(--t3);font-family:var(--mono);margin-left:auto;">95%</span>
+              <span style="font-size:10px;font-weight:700;color:var(--t3);background:var(--bg3);padding:1px 6px;border-radius:3px;flex-shrink:0;">HIGH</span>
+            </div>
+          </div>
+        </div>
       </div>
+
+    </div>
+
+    <!-- Summary bar -->
+    <div style="padding:13px 20px;background:var(--bg2);border:1px solid var(--br);border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+        <span style="font-family:var(--mono);font-size:12px;color:var(--t3);">drift_score&nbsp;<span style="color:var(--rd);font-weight:600;">0.750</span></span>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--t3);">regressions&nbsp;<span style="color:var(--rd);font-weight:600;">3 critical</span></span>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--t3);">status&nbsp;<span style="color:var(--rd);font-weight:600;">FAILED</span></span>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--t3);">action&nbsp;<span style="color:var(--yl);font-weight:600;">deployment blocked</span></span>
+      </div>
+      <a href="/dashboard" style="font-size:13px;color:var(--or);font-weight:600;white-space:nowrap;">View live dashboard →</a>
     </div>
   </div>
 </section>
