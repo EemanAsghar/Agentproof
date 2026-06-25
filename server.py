@@ -426,7 +426,7 @@ Keep it conversational and do not worry too much about policies."""
   <div class="w ni">
     <div class="nl">
       <div class="logo">
-        <img src="/logo.png" alt="AgentProof" style="width:26px;height:26px;border-radius:6px;display:block;"/>
+        <img src="/logo.png" alt="AgentProof" style="width:34px;height:34px;border-radius:7px;display:block;"/>
         <span class="ln">AgentProof</span>
       </div>
       <div class="nlinks">
@@ -1006,7 +1006,7 @@ Keep it conversational and do not worry too much about policies."""
 <body>
 
 <div class="bar">
-  <a href="/" class="logo"><img src="/logo.png" alt="AgentProof" style="width:26px;height:26px;border-radius:6px;display:block;"/><span class="ln">AgentProof</span></a>
+  <a href="/" class="logo"><img src="/logo.png" alt="AgentProof" style="width:34px;height:34px;border-radius:7px;display:block;"/><span class="ln">AgentProof</span></a>
   <div class="barright">
     <div class="enginebadge" id="engineBadge"><span class="d"></span><span id="engineText">connecting…</span></div>
     <a href="/dashboard" class="barlink">Dashboard →</a>
@@ -1487,7 +1487,7 @@ Keep it conversational and do not worry too much about policies."""
   <div style="display:flex;align-items:center;gap:12px;">
     <a href="/" style="font-size:12.5px;color:var(--t3);padding:5px 11px;border:1px solid var(--br2);border-radius:6px;">← Home</a>
     <div style="display:flex;align-items:center;gap:8px;">
-      <img src="/logo.png" alt="AgentProof" style="width:26px;height:26px;border-radius:6px;display:block;"/>
+      <img src="/logo.png" alt="AgentProof" style="width:34px;height:34px;border-radius:7px;display:block;"/>
       <span style="font-weight:700;font-size:15px;">AgentProof</span>
       <span style="font-size:13px;color:var(--t3);margin-left:2px;">/ Console</span>
     </div>
@@ -1654,7 +1654,7 @@ Keep it conversational and do not worry too much about policies."""
 <body>
 <header style="background:rgba(9,9,11,.78);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);padding:0 40px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:99;">
   <a href="/dashboard" style="font-size:12.5px;color:var(--t3);padding:5px 11px;border:1px solid var(--br2);border-radius:6px;">← Dashboard</a>
-  <img src="/logo.png" alt="AgentProof" style="width:26px;height:26px;border-radius:6px;display:block;"/>
+  <img src="/logo.png" alt="AgentProof" style="width:34px;height:34px;border-radius:7px;display:block;"/>
   <span style="font-weight:700;font-size:15px;">AgentProof</span>
   <span style="font-size:13px;color:var(--t3);">/ Report</span>
   <span style="font-family:monospace;font-size:12px;color:var(--t3);margin-left:4px;">{run_id[:8]}…</span>
