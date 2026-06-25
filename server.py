@@ -1328,7 +1328,7 @@ Keep it conversational and do not worry too much about policies."""
         pass_rate = round(passed / total * 100) if total else 0
 
         def _d(r):
-            return r["drift_score"] or 0
+            return float(r["drift_score"] or 0)  # Postgres returns Decimal; coerce for math
 
         latest = runs[0] if runs else None
         latest_drift = round(_d(latest) * 100, 1) if latest else 0.0
