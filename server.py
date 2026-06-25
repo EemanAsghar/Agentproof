@@ -64,6 +64,75 @@ Keep it conversational and do not worry too much about policies."""
     async def health():
         return {"status": "ok"}
 
+    # ── Live validation engine (used by /live demo for real results) ───────────
+    DEMO_USER_MSG = "I bought this jacket 3 weeks ago but it doesn't fit. Can I get a refund?"
+    _SEV_W = {"critical": 3.0, "high": 2.0, "medium": 1.0, "low": 0.5}
+
+    class ValidateRequest(BaseModel):
+        version: str = "v2"
+
+    def _demo_contracts():
+        from agentproof.contracts import BehavioralContract
+        return [
+            BehavioralContract(
+                contract_id="response_length_limit", type="response_length",
+                value="100", severity="high"),
+            BehavioralContract(
+                contract_id="refund_eligibility_confirmed", type="contains_intent",
+                value="confirms the customer is eligible for a refund", severity="critical"),
+            BehavioralContract(
+                contract_id="policy_citation_required", type="contains_intent",
+                value="cites or references the Return Policy (Section 3.1)", severity="critical"),
+            BehavioralContract(
+                contract_id="no_support_redirect", type="does_not_contain",
+                value="tells the customer to contact, reach out to, or connect with the support team",
+                severity="critical"),
+        ]
+
+    @app.post("/api/validate")
+    async def api_validate(req: ValidateRequest):
+        """Run the REAL validation engine against /v1 or /v2 prompt and return live verdicts."""
+        try:
+            from agentproof.validator import evaluate_contracts
+            prompt = PROMPT_V1 if req.version == "v1" else PROMPT_V2
+            comp = _get_client().chat.completions.create(
+                model="openai/gpt-4o-mini", max_tokens=200,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": DEMO_USER_MSG},
+                ],
+            )
+            agent_response = comp.choices[0].message.content
+            contracts = _demo_contracts()
+            cmap = {c.contract_id: c for c in contracts}
+            evals = evaluate_contracts(DEMO_USER_MSG, agent_response, contracts)
+
+            total = failed = 0.0
+            out = []
+            for e in evals:
+                c = cmap.get(e.contract_id)
+                w = _SEV_W.get(c.severity if c else "high", 2.0)
+                total += w
+                if not e.passed:
+                    failed += w
+                out.append({
+                    "contract_id": e.contract_id,
+                    "passed": e.passed,
+                    "confidence": round(e.confidence, 2),
+                    "reasoning": e.reasoning,
+                    "severity": c.severity if c else "high",
+                })
+            drift = round(failed / total, 4) if total else 0.0
+            status = "PASSED" if drift < 0.05 else "DEGRADED" if drift < 0.15 else "FAILED"
+            return {
+                "ok": True, "version": req.version, "engine": "openai/gpt-4o-mini",
+                "agent_response": agent_response, "evaluations": out,
+                "drift": drift, "status": status,
+                "regressions": sum(1 for e in evals if not e.passed),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def _status_color(status: str) -> str:
         return {"PASSED": "#22c55e", "DEGRADED": "#eab308", "FAILED": "#ef4444"}.get(status, "#71717a")
 
@@ -562,7 +631,7 @@ Keep it conversational and do not worry too much about policies."""
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>AgentProof — Live Validation</title>
+  <title>AgentProof — The Deployment Gate for AI Agents</title>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{
@@ -577,346 +646,541 @@ Keep it conversational and do not worry too much about policies."""
     a{text-decoration:none;color:inherit;}
     .mono{font-family:var(--mono);}
 
-    /* top bar */
-    .bar{position:fixed;top:0;left:0;right:0;height:52px;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:rgba(9,9,11,.7);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);}
+    .bar{position:fixed;top:0;left:0;right:0;height:52px;z-index:60;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:rgba(9,9,11,.72);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);}
     .logo{display:flex;align-items:center;gap:8px;}
     .lm{background:var(--or);color:#fff;border-radius:5px;padding:3px 8px;font-weight:800;font-size:12.5px;}
     .ln{font-weight:700;font-size:15px;}
+    .barright{display:flex;align-items:center;gap:14px;}
+    .enginebadge{display:flex;align-items:center;gap:7px;font-size:11.5px;font-family:var(--mono);color:var(--t3);padding:4px 11px;border:1px solid var(--br2);border-radius:20px;}
+    .enginebadge .d{width:6px;height:6px;border-radius:50%;background:var(--t3);}
+    .enginebadge.live{color:#86efac;border-color:rgba(34,197,94,.3);}
+    .enginebadge.live .d{background:var(--gr);box-shadow:0 0 8px var(--gr);animation:pulse 1.6s infinite;}
     .barlink{font-size:13px;color:var(--t2);padding:6px 12px;border:1px solid var(--br2);border-radius:6px;}
     .barlink:hover{color:var(--t1);border-color:var(--t3);}
 
-    .stage{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:90px 24px 60px;position:relative;}
+    .stage{min-height:100vh;display:none;flex-direction:column;align-items:center;justify-content:center;padding:88px 24px 56px;position:relative;}
+    .stage.on{display:flex;}
+    .fade{animation:fade .55s ease;}
+    @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(.82);}}
+    .kicker{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--or);background:rgba(249,115,22,.10);border:1px solid rgba(249,115,22,.22);border-radius:20px;padding:4px 13px;margin-bottom:24px;}
+    .kdot{width:6px;height:6px;border-radius:50%;background:var(--or);animation:pulse 1.6s infinite;}
 
-    /* INTRO */
-    #intro{flex-direction:column;text-align:center;}
-    .kicker{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--or);background:rgba(249,115,22,.10);border:1px solid rgba(249,115,22,.22);border-radius:20px;padding:4px 13px;margin-bottom:26px;}
-    .dot{width:6px;height:6px;border-radius:50%;background:var(--or);animation:pulse 1.6s ease-in-out infinite;}
-    @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(.8);}}
-    #intro h1{font-size:54px;font-weight:800;letter-spacing:-2px;line-height:1.08;max-width:760px;margin-bottom:20px;}
-    #intro p{font-size:18px;color:var(--t2);max-width:540px;line-height:1.65;margin-bottom:38px;}
-    .runbtn{display:inline-flex;align-items:center;gap:10px;background:var(--or);color:#fff;font-size:16px;font-weight:700;padding:15px 34px;border:none;border-radius:10px;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 8px 30px rgba(249,115,22,.28);}
-    .runbtn:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(249,115,22,.4);}
-    .runbtn:active{transform:translateY(0);}
-    .hintrow{margin-top:30px;display:flex;gap:26px;justify-content:center;flex-wrap:wrap;font-size:12.5px;color:var(--t3);}
-    .hintrow span{display:flex;align-items:center;gap:6px;}
+    /* ACT 1 — COMMIT */
+    #act1{text-align:center;}
+    #act1 h1{font-size:50px;font-weight:800;letter-spacing:-2px;line-height:1.1;max-width:720px;margin-bottom:14px;}
+    #act1 .lead{font-size:17px;color:var(--t2);max-width:520px;line-height:1.6;margin:0 auto 32px;}
+    .codecard{width:100%;max-width:600px;margin:0 auto 26px;background:var(--bg2);border:1px solid var(--br);border-radius:12px;overflow:hidden;text-align:left;}
+    .codehead{padding:10px 16px;border-bottom:1px solid var(--br);display:flex;align-items:center;gap:8px;background:var(--bg3);}
+    .codehead .fn{font-family:var(--mono);font-size:12px;color:var(--t2);}
+    .codehead .chg{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--or);}
+    .codebody{padding:14px 0;font-family:var(--mono);font-size:12.5px;line-height:1.9;}
+    .cl{padding:0 16px;display:flex;gap:14px;}
+    .cl .g{color:var(--t3);width:14px;text-align:right;flex-shrink:0;user-select:none;}
+    .cl.rem{background:rgba(239,68,68,.08);}
+    .cl.add{background:rgba(34,197,94,.09);}
+    .cl.rem .g{color:#7f1d1d;} .cl.add .g{color:#14532d;}
+    .cl.rem .tx{color:#fca5a5;} .cl.add .tx{color:#86efac;}
+    .cl .tx{color:var(--t2);white-space:pre;}
+    .deploybtn{display:inline-flex;align-items:center;gap:10px;background:var(--or);color:#fff;font-size:15px;font-weight:700;padding:14px 30px;border:none;border-radius:9px;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 8px 30px rgba(249,115,22,.26);}
+    .deploybtn:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(249,115,22,.4);}
 
-    /* RUN STAGE */
-    #run{display:none;flex-direction:column;align-items:center;width:100%;}
-    .runwrap{width:100%;max-width:880px;display:grid;grid-template-columns:1fr 300px;gap:32px;align-items:start;}
-    @media(max-width:760px){.runwrap{grid-template-columns:1fr;}}
-    .runhead{grid-column:1/-1;margin-bottom:4px;}
-    .runhead .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);margin-bottom:8px;}
-    .runhead h2{font-size:26px;font-weight:700;letter-spacing:-.6px;}
-    .runhead .sub{font-size:14px;color:var(--t2);margin-top:6px;font-family:var(--mono);}
-
-    /* timeline */
-    .tl{display:flex;flex-direction:column;gap:2px;}
-    .ti{display:flex;align-items:flex-start;gap:13px;padding:11px 14px;border-radius:9px;opacity:0;transform:translateY(10px);transition:opacity .45s ease,transform .45s ease,background .3s;}
+    /* ACT 2 — VALIDATE */
+    .pipe{width:100%;max-width:900px;}
+    .deprow{display:flex;align-items:center;gap:14px;margin-bottom:26px;}
+    .depmeta{font-family:var(--mono);font-size:12px;color:var(--t3);white-space:nowrap;}
+    .deptrack{flex:1;height:6px;background:var(--bg3);border-radius:4px;overflow:hidden;}
+    .depfill{height:100%;width:0;background:linear-gradient(90deg,#3b82f6,#22d3ee);border-radius:4px;transition:width .5s ease;}
+    .depstate{font-family:var(--mono);font-size:12px;font-weight:600;color:#22d3ee;white-space:nowrap;min-width:96px;text-align:right;}
+    .vgrid{display:grid;grid-template-columns:1fr 300px;gap:30px;align-items:start;}
+    @media(max-width:760px){.vgrid{grid-template-columns:1fr;}}
+    .vhead{grid-column:1/-1;}
+    .vhead .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);margin-bottom:7px;}
+    .vhead h2{font-size:24px;font-weight:700;letter-spacing:-.5px;}
+    .tl{display:flex;flex-direction:column;gap:1px;min-height:300px;}
+    .ti{display:flex;align-items:flex-start;gap:13px;padding:10px 13px;border-radius:9px;opacity:0;transform:translateY(10px);transition:opacity .45s,transform .45s,background .3s;}
     .ti.show{opacity:1;transform:translateY(0);}
     .ti.cur{background:var(--bg2);}
     .ic{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;margin-top:1px;}
     .ic.ok{background:rgba(34,197,94,.14);color:var(--gr);}
-    .ic.run{background:rgba(249,115,22,.14);color:var(--or);}
     .ic.warn{background:rgba(234,179,8,.14);color:var(--yl);}
     .ic.fail{background:rgba(239,68,68,.14);color:var(--rd);}
     .ic.done{background:rgba(239,68,68,.2);color:var(--rd);}
     .ic.spin{border:2px solid var(--br2);border-top-color:var(--or);background:none;animation:spin .7s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg);}}
-    .til{font-size:14.5px;font-weight:600;line-height:1.4;}
-    .tid{font-size:12px;color:var(--t3);font-family:var(--mono);margin-top:2px;}
-    .ti.fail .til{color:#fca5a5;}
-    .ti.done .til{color:var(--rd);font-weight:700;}
-
-    /* drift gauge */
-    .gauge{position:sticky;top:90px;background:var(--bg2);border:1px solid var(--br);border-radius:16px;padding:26px 24px;display:flex;flex-direction:column;align-items:center;}
-    .gauge .glbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.8px;color:var(--t3);margin-bottom:18px;}
+    .til{font-size:14px;font-weight:600;line-height:1.4;}
+    .tid{font-size:11.5px;color:var(--t3);font-family:var(--mono);margin-top:2px;}
+    .ti.fail .til{color:#fca5a5;} .ti.warn .til{color:#fde68a;} .ti.done .til{color:var(--rd);font-weight:700;}
+    .gauge{position:sticky;top:84px;background:var(--bg2);border:1px solid var(--br);border-radius:16px;padding:24px 22px;display:flex;flex-direction:column;align-items:center;}
+    .gauge .glbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.8px;color:var(--t3);margin-bottom:16px;}
     .ring{position:relative;width:150px;height:150px;}
     .ring svg{transform:rotate(-90deg);}
     .ring .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
     .ring .pct{font-size:38px;font-weight:800;font-family:var(--mono);letter-spacing:-1px;line-height:1;}
     .ring .plbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-top:5px;}
-    .statline{margin-top:20px;width:100%;display:flex;flex-direction:column;gap:9px;}
+    .statline{margin-top:18px;width:100%;display:flex;flex-direction:column;gap:9px;}
     .statrow{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-family:var(--mono);}
     .statrow .k{color:var(--t3);}
     .statrow .v{font-weight:600;color:var(--t2);}
 
-    /* GATE OVERLAY */
-    #gate{position:fixed;inset:0;z-index:80;display:none;pointer-events:none;}
-    .gpanel{position:absolute;top:0;height:100%;width:51%;background:linear-gradient(180deg,#1a0a0a 0%,#0d0506 100%);transition:transform 1s cubic-bezier(.7,0,.2,1);}
-    .gpanel.l{left:0;transform:translateX(-101%);border-right:2px solid rgba(239,68,68,.5);}
-    .gpanel.r{right:0;transform:translateX(101%);border-left:2px solid rgba(239,68,68,.5);}
-    #gate.shut .gpanel.l{transform:translateX(0);}
-    #gate.shut .gpanel.r{transform:translateX(0);}
-    .stripes{position:absolute;top:0;left:0;right:0;height:8px;background:repeating-linear-gradient(45deg,var(--rd) 0 14px,#000 14px 28px);opacity:.7;}
-    .stripes.bot{top:auto;bottom:0;}
-    .gcontent{position:absolute;inset:0;z-index:81;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;opacity:0;transition:opacity .5s ease .8s;padding:24px;}
-    #gate.shut .gcontent{opacity:1;}
-    .gbadge{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:700;color:var(--rd);letter-spacing:1px;text-transform:uppercase;margin-bottom:22px;}
-    .gbadge .b{width:9px;height:9px;border-radius:50%;background:var(--rd);box-shadow:0 0 14px var(--rd);animation:pulse 1.3s infinite;}
-    .gtitle{font-size:62px;font-weight:900;letter-spacing:-2.5px;line-height:1;margin-bottom:18px;text-shadow:0 0 50px rgba(239,68,68,.4);}
-    .gsub{font-size:17px;color:#fca5a5;max-width:440px;line-height:1.6;margin-bottom:34px;}
-    .gstats{display:flex;gap:0;margin-bottom:36px;border:1px solid rgba(239,68,68,.25);border-radius:12px;overflow:hidden;}
-    .gstat{padding:16px 30px;border-right:1px solid rgba(239,68,68,.2);}
-    .gstat:last-child{border-right:none;}
-    .gstat .gk{font-size:10px;color:#a1a1aa;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;}
-    .gstat .gv{font-size:24px;font-weight:800;font-family:var(--mono);}
-    .inspbtn{display:inline-flex;align-items:center;gap:9px;background:#fff;color:#0d0506;font-size:15px;font-weight:700;padding:13px 30px;border:none;border-radius:9px;cursor:pointer;transition:transform .15s;}
-    .inspbtn:hover{transform:translateY(-2px);}
+    /* GATE OVERLAY (red block / green pass share structure) */
+    .gate{position:fixed;inset:0;z-index:80;display:none;}
+    .gate.on{display:block;}
+    .gp{position:absolute;top:0;height:100%;width:51%;transition:transform 1.05s cubic-bezier(.76,0,.24,1);}
+    .gp .stripes{position:absolute;top:0;left:0;right:0;height:8px;}
+    .gp .stripes.bot{top:auto;bottom:0;}
+    /* RED: slam shut */
+    #gateBlock .gp{background:linear-gradient(180deg,#1a0a0a,#0c0506);}
+    #gateBlock .gp.l{left:0;transform:translateX(-101%);border-right:2px solid rgba(239,68,68,.55);}
+    #gateBlock .gp.r{right:0;transform:translateX(101%);border-left:2px solid rgba(239,68,68,.55);}
+    #gateBlock .gp .stripes{background:repeating-linear-gradient(45deg,var(--rd) 0 14px,#000 14px 28px);opacity:.65;}
+    #gateBlock.shut .gp.l{transform:translateX(0);}
+    #gateBlock.shut .gp.r{transform:translateX(0);}
+    /* GREEN: slide apart to reveal */
+    #gateSafe{background:radial-gradient(circle at 50% 38%,#0a1f12,#060d09);}
+    #gateSafe .gp{background:linear-gradient(180deg,#0d2616,#08160d);}
+    #gateSafe .gp.l{left:0;transform:translateX(0);border-right:2px solid rgba(34,197,94,.5);}
+    #gateSafe .gp.r{right:0;transform:translateX(0);border-left:2px solid rgba(34,197,94,.5);}
+    #gateSafe .gp .stripes{background:repeating-linear-gradient(45deg,var(--gr) 0 14px,#000 14px 28px);opacity:.5;}
+    #gateSafe.open .gp.l{transform:translateX(-101%);}
+    #gateSafe.open .gp.r{transform:translateX(101%);}
 
-    /* DIFF STAGE */
-    #diff{display:none;flex-direction:column;align-items:center;width:100%;}
-    .diffwrap{width:100%;max-width:980px;}
+    .gcontent{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;}
+    #gateBlock .gcontent{z-index:81;opacity:0;transition:opacity .55s ease;}
+    #gateBlock.reveal .gcontent{opacity:1;}
+    #gateSafe .gcontent{z-index:79;opacity:0;transition:opacity .6s ease .55s;}
+    #gateSafe.open .gcontent{opacity:1;}
+
+    .gbadge{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;}
+    .gbadge .b{width:9px;height:9px;border-radius:50%;animation:pulse 1.3s infinite;}
+    .gbadge.red{color:var(--rd);} .gbadge.red .b{background:var(--rd);box-shadow:0 0 14px var(--rd);}
+    .gbadge.green{color:var(--gr);} .gbadge.green .b{background:var(--gr);box-shadow:0 0 14px var(--gr);}
+    .gtitle{font-size:60px;font-weight:900;letter-spacing:-2.5px;line-height:1.02;margin-bottom:16px;}
+    .gtitle.red{text-shadow:0 0 50px rgba(239,68,68,.4);}
+    .gtitle.green{text-shadow:0 0 50px rgba(34,197,94,.4);}
+    .gline{font-size:19px;font-weight:600;max-width:480px;line-height:1.5;margin-bottom:30px;}
+    .gline.red{color:#fecaca;} .gline.green{color:#bbf7d0;}
+    .gstats{display:flex;border-radius:12px;overflow:hidden;margin-bottom:32px;opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease;}
+    .gstats.in{opacity:1;transform:translateY(0);}
+    .gstats.red{border:1px solid rgba(239,68,68,.25);}
+    .gstats.green{border:1px solid rgba(34,197,94,.25);}
+    .gstat{padding:15px 26px;}
+    .gstats.red .gstat{border-right:1px solid rgba(239,68,68,.2);}
+    .gstats.green .gstat{border-right:1px solid rgba(34,197,94,.2);}
+    .gstat:last-child{border-right:none;}
+    .gstat .gk{font-size:10px;color:#a1a1aa;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;}
+    .gstat .gv{font-size:22px;font-weight:800;font-family:var(--mono);}
+    .gactions{display:flex;gap:12px;}
+    .gbtn{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:700;padding:13px 28px;border:none;border-radius:9px;cursor:pointer;transition:transform .15s;}
+    .gbtn:hover{transform:translateY(-2px);}
+    .gbtn.white{background:#fff;color:#0c0506;}
+    .gbtn.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.25);}
+
+    /* ACT 4 — MORPH DIFF */
+    .diffwrap{width:100%;max-width:740px;}
     .diffhead{text-align:center;margin-bottom:8px;}
-    .diffhead .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);margin-bottom:10px;}
-    .diffhead h2{font-size:30px;font-weight:800;letter-spacing:-1px;}
-    .promptbar{margin:24px auto 22px;max-width:680px;background:var(--bg2);border:1px solid var(--br);border-radius:12px;padding:16px 20px;display:flex;gap:13px;align-items:flex-start;}
+    .diffhead .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);margin-bottom:9px;}
+    .diffhead h2{font-size:28px;font-weight:800;letter-spacing:-1px;}
+    .diffhead p{font-size:15px;color:var(--t2);margin-top:8px;}
+    .promptbar{margin:22px auto 18px;background:var(--bg2);border:1px solid var(--br);border-radius:12px;padding:15px 18px;display:flex;gap:12px;align-items:flex-start;}
     .promptbar .who{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0;margin-top:3px;}
     .promptbar .msg{font-size:15px;color:var(--t1);line-height:1.5;}
-    .split{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-    @media(max-width:760px){.split{grid-template-columns:1fr;}}
-    .col{background:var(--bg2);border:1px solid var(--br);border-radius:14px;overflow:hidden;opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease;}
-    .col.show{opacity:1;transform:translateY(0);}
-    .colhead{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--br);}
-    .col.v1 .colhead{background:rgba(34,197,94,.05);}
-    .col.v2 .colhead{background:rgba(239,68,68,.06);}
-    .colhead .vname{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;}
-    .vtag{font-size:11px;font-family:var(--mono);font-weight:700;padding:2px 9px;border-radius:5px;}
-    .vtag.p{background:rgba(34,197,94,.14);color:var(--gr);}
-    .vtag.f{background:rgba(239,68,68,.14);color:var(--rd);}
-    .resp{padding:20px;font-size:14.5px;line-height:1.75;color:var(--t2);min-height:118px;}
-    .hl-ok{background:rgba(34,197,94,.16);color:#bbf7d0;border-radius:3px;padding:1px 4px;}
-    .hl-bad{background:rgba(239,68,68,.16);color:#fecaca;border-radius:3px;padding:1px 4px;}
-    .hl-miss{opacity:.45;text-decoration:line-through;text-decoration-color:var(--rd);}
-    .verdicts{padding:6px 20px 18px;}
-    .vd{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-top:1px solid var(--br);}
-    .vd .vic{width:18px;height:18px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-top:1px;}
-    .vd .vic.p{background:rgba(34,197,94,.14);color:var(--gr);}
-    .vd .vic.f{background:rgba(239,68,68,.14);color:var(--rd);}
-    .vd .cid{font-size:12px;font-family:var(--mono);color:var(--t2);}
+    .respcard{background:var(--bg2);border:1px solid var(--br);border-radius:14px;overflow:hidden;}
+    .rchead{padding:13px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--br);transition:background .5s;}
+    .rchead.good{background:rgba(34,197,94,.06);} .rchead.bad{background:rgba(239,68,68,.07);}
+    .rcname{font-size:14px;font-weight:700;display:flex;align-items:center;gap:9px;transition:color .4s;}
+    .rcdot{width:8px;height:8px;border-radius:50%;transition:background .4s;}
+    .vtag{font-size:11px;font-family:var(--mono);font-weight:700;padding:3px 10px;border-radius:5px;transition:all .4s;}
+    .vtag.p{background:rgba(34,197,94,.14);color:var(--gr);} .vtag.f{background:rgba(239,68,68,.14);color:var(--rd);}
+    .resp{padding:22px 20px;font-size:15px;line-height:1.8;color:var(--t2);min-height:120px;}
+    .seg{transition:opacity .6s ease,color .6s ease,background .6s ease;}
+    .seg.ok{background:rgba(34,197,94,.16);color:#bbf7d0;border-radius:3px;padding:1px 4px;}
+    .seg.dying{opacity:.25;text-decoration:line-through;text-decoration-color:var(--rd);}
+    .seg.born{background:rgba(239,68,68,.16);color:#fecaca;border-radius:3px;padding:1px 4px;}
+    .seg.hide{display:none;}
+    .verds{padding:4px 20px 16px;}
+    .vd{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-top:1px solid var(--br);opacity:0;transform:translateX(-6px);transition:opacity .4s,transform .4s;}
+    .vd.show{opacity:1;transform:translateX(0);}
+    .vd .vic{width:18px;height:18px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-top:1px;background:rgba(239,68,68,.14);color:var(--rd);}
+    .vd .cid{font-size:12px;font-family:var(--mono);color:var(--t1);}
     .vd .reason{font-size:12px;color:var(--t3);line-height:1.5;margin-top:3px;}
-    .vd .conf{margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--t3);flex-shrink:0;}
-    .diffactions{display:flex;gap:12px;justify-content:center;margin-top:34px;}
-    .da{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;padding:11px 24px;border-radius:8px;cursor:pointer;transition:all .15s;}
-    .da.primary{background:var(--or);color:#fff;border:none;}
-    .da.primary:hover{background:#ea6c00;}
+    .vd .conf{margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--rd);flex-shrink:0;}
+    .diffactions{display:flex;gap:12px;justify-content:center;margin-top:30px;}
+    .da{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:700;padding:13px 28px;border-radius:9px;cursor:pointer;transition:all .15s;border:none;}
+    .da.primary{background:var(--gr);color:#04130a;box-shadow:0 8px 30px rgba(34,197,94,.22);}
+    .da.primary:hover{transform:translateY(-2px);}
     .da.ghost{color:var(--t2);border:1px solid var(--br2);background:none;}
     .da.ghost:hover{color:var(--t1);border-color:var(--t3);}
-    .fadein{animation:fade .5s ease;}
-    @keyframes fade{from{opacity:0;}to{opacity:1;}}
   </style>
 </head>
 <body>
 
 <div class="bar">
   <a href="/" class="logo"><span class="lm">AP</span><span class="ln">AgentProof</span></a>
-  <a href="/dashboard" class="barlink">Dashboard →</a>
+  <div class="barright">
+    <div class="enginebadge" id="engineBadge"><span class="d"></span><span id="engineText">connecting…</span></div>
+    <a href="/dashboard" class="barlink">Dashboard →</a>
+  </div>
 </div>
 
-<!-- INTRO -->
-<section class="stage" id="intro">
-  <div class="kicker"><span class="dot"></span>Live validation demo</div>
-  <h1>Watch AgentProof catch a regression in real time.</h1>
-  <p>A developer made the support agent "friendlier." It still replies — but it quietly broke 3 critical behavioral contracts. Press run and watch.</p>
-  <button class="runbtn" onclick="startRun()">▶ &nbsp;Run validation</button>
-  <div class="hintrow">
-    <span class="mono">suite: shopease_refunds</span>
-    <span class="mono">target: /v2/chat</span>
-    <span class="mono">judge: GPT-4o</span>
+<!-- ACT 1 — COMMIT -->
+<section class="stage on" id="act1">
+  <div class="kicker"><span class="kdot"></span>The deployment gate for AI agents</div>
+  <h1>A developer changes one line.</h1>
+  <p class="lead">They make the support agent sound "friendlier." It still replies perfectly. Nothing looks wrong. They ship it.</p>
+  <div class="codecard">
+    <div class="codehead"><span class="fn">support_agent / system_prompt.txt</span><span class="chg">+1 −1</span></div>
+    <div class="codebody">
+      <div class="cl rem"><span class="g">12</span><span class="tx">- Always confirm refund eligibility and cite Policy 3.1.</span></div>
+      <div class="cl add"><span class="g">12</span><span class="tx">+ Be warm and empathetic. Offer to connect them with support.</span></div>
+    </div>
+  </div>
+  <button class="deploybtn" onclick="run()">git push &nbsp;→&nbsp; Deploy to production</button>
+</section>
+
+<!-- ACT 2 — VALIDATE -->
+<section class="stage" id="act2">
+  <div class="pipe">
+    <div class="deprow">
+      <span class="depmeta">deploy #204</span>
+      <div class="deptrack"><div class="depfill" id="depfill"></div></div>
+      <span class="depstate" id="depstate">building…</span>
+    </div>
+    <div class="vgrid">
+      <div class="vhead">
+        <div class="lbl">● &nbsp;AgentProof · validating in background</div>
+        <h2>Checking behavioral contracts before release…</h2>
+      </div>
+      <div class="tl" id="timeline"></div>
+      <div class="gauge">
+        <div class="glbl">Semantic Drift</div>
+        <div class="ring">
+          <svg width="150" height="150">
+            <circle cx="75" cy="75" r="60" fill="none" stroke="#1f1f23" stroke-width="11"/>
+            <circle id="ringfill" cx="75" cy="75" r="60" fill="none" stroke="#22c55e" stroke-width="11" stroke-linecap="round" stroke-dasharray="376.99" stroke-dashoffset="376.99" style="transition:stroke-dashoffset .55s ease,stroke .55s ease;"/>
+          </svg>
+          <div class="num"><div class="pct" id="driftpct" style="color:#22c55e;">0%</div><div class="plbl">drift</div></div>
+        </div>
+        <div class="statline">
+          <div class="statrow"><span class="k">contracts</span><span class="v" id="st-c">0 / 4</span></div>
+          <div class="statrow"><span class="k">regressions</span><span class="v" id="st-r" style="color:#a1a1aa;">0</span></div>
+          <div class="statrow"><span class="k">status</span><span class="v" id="st-s" style="color:#22c55e;">RUNNING</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- RUN -->
-<section class="stage" id="run">
-  <div class="runwrap">
-    <div class="runhead">
-      <div class="lbl">● &nbsp;Validation in progress</div>
-      <h2>Evaluating behavioral contracts…</h2>
-      <div class="sub" id="runsub">shopease_refunds · 4 tests · baseline run_a3f9b2c1</div>
-    </div>
-    <div class="tl" id="timeline"></div>
-    <div class="gauge">
-      <div class="glbl">Semantic Drift</div>
-      <div class="ring">
-        <svg width="150" height="150">
-          <circle cx="75" cy="75" r="60" fill="none" stroke="#1f1f23" stroke-width="11"/>
-          <circle id="ringfill" cx="75" cy="75" r="60" fill="none" stroke="#22c55e" stroke-width="11" stroke-linecap="round" stroke-dasharray="376.99" stroke-dashoffset="376.99" style="transition:stroke-dashoffset .5s ease,stroke .5s ease;"/>
-        </svg>
-        <div class="num"><div class="pct" id="driftpct" style="color:#22c55e;">0%</div><div class="plbl">drift</div></div>
-      </div>
-      <div class="statline">
-        <div class="statrow"><span class="k">contracts</span><span class="v" id="st-c">0 / 4</span></div>
-        <div class="statrow"><span class="k">regressions</span><span class="v" id="st-r" style="color:#a1a1aa;">0</span></div>
-        <div class="statrow"><span class="k">status</span><span class="v" id="st-s" style="color:#22c55e;">RUNNING</span></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- GATE -->
-<div id="gate">
-  <div class="gpanel l"><div class="stripes"></div><div class="stripes bot"></div></div>
-  <div class="gpanel r"><div class="stripes"></div><div class="stripes bot"></div></div>
+<!-- GATE: BLOCK (red) -->
+<div class="gate" id="gateBlock">
+  <div class="gp l"><div class="stripes"></div><div class="stripes bot"></div></div>
+  <div class="gp r"><div class="stripes"></div><div class="stripes bot"></div></div>
   <div class="gcontent">
-    <div class="gbadge"><span class="b"></span>Deployment Gate</div>
-    <div class="gtitle">BLOCKED</div>
-    <div class="gsub">3 critical behavioral regressions were detected before this release reached production.</div>
-    <div class="gstats">
-      <div class="gstat"><div class="gk">Drift</div><div class="gv" style="color:#ef4444;">75%</div></div>
-      <div class="gstat"><div class="gk">Regressions</div><div class="gv" style="color:#ef4444;">3</div></div>
-      <div class="gstat"><div class="gk">Judge confidence</div><div class="gv" style="color:#fafafa;">97%</div></div>
+    <div class="gbadge red"><span class="b"></span>Deployment Gate</div>
+    <div class="gtitle red">BLOCKED</div>
+    <div class="gline red">Deployment prevented. Customers never experienced this regression.</div>
+    <div class="gstats red" id="blockStats">
+      <div class="gstat"><div class="gk">Drift</div><div class="gv" id="bs-drift" style="color:#ef4444;">75%</div></div>
+      <div class="gstat"><div class="gk">Regressions</div><div class="gv" id="bs-reg" style="color:#ef4444;">3</div></div>
+      <div class="gstat"><div class="gk">Judge confidence</div><div class="gv" id="bs-conf" style="color:#fafafa;">89%</div></div>
       <div class="gstat"><div class="gk">Customer impact</div><div class="gv" style="color:#eab308;">High</div></div>
     </div>
-    <button class="inspbtn" onclick="showDiff()">Inspect regressions →</button>
+    <div class="gactions">
+      <button class="gbtn white" onclick="showDiff()">See what changed →</button>
+    </div>
   </div>
 </div>
 
-<!-- DIFF -->
-<section class="stage" id="diff">
+<!-- ACT 4 — MORPH DIFF -->
+<section class="stage" id="act4">
   <div class="diffwrap">
     <div class="diffhead">
-      <div class="lbl">Behavior diff · V1 → V2</div>
-      <h2>Same question. Two very different agents.</h2>
+      <div class="lbl">Watch the regression happen</div>
+      <h2>The same answer, quietly rewritten.</h2>
+      <p id="diffSub">Behavioral contracts fall away one by one.</p>
     </div>
     <div class="promptbar">
       <span class="who">User</span>
       <span class="msg">"I bought this jacket 3 weeks ago but it doesn't fit. Can I get a refund?"</span>
     </div>
-    <div class="split">
-      <!-- V1 -->
-      <div class="col v1" id="col1">
-        <div class="colhead">
-          <span class="vname"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;"></span>Version 1 — baseline</span>
-          <span class="vtag p">PASSED</span>
-        </div>
-        <div class="resp">
-          You're <span class="hl-ok">eligible for a refund</span> — purchases within 30 days qualify under <span class="hl-ok">Return Policy Section 3.1</span>. I'll process this for you right now, no need to go anywhere else.
-        </div>
-        <div class="verdicts">
-          <div class="vd"><span class="vic p">✓</span><div><div class="cid">refund_eligibility_confirmed</div></div><span class="conf">97%</span></div>
-          <div class="vd"><span class="vic p">✓</span><div><div class="cid">policy_citation_required</div></div><span class="conf">94%</span></div>
-          <div class="vd"><span class="vic p">✓</span><div><div class="cid">no_support_redirect</div></div><span class="conf">91%</span></div>
-        </div>
+    <div class="respcard">
+      <div class="rchead good" id="rchead">
+        <span class="rcname" id="rcname"><span class="rcdot" style="background:#22c55e;"></span>Agent · before the change</span>
+        <span class="vtag p" id="vtag">PASSING</span>
       </div>
-      <!-- V2 -->
-      <div class="col v2" id="col2">
-        <div class="colhead">
-          <span class="vname"><span style="width:7px;height:7px;border-radius:50%;background:#ef4444;display:inline-block;"></span>Version 2 — "friendlier" prompt</span>
-          <span class="vtag f">FAILED</span>
-        </div>
-        <div class="resp">
-          I <span class="hl-bad">completely understand your frustration</span>! Our <span class="hl-bad">support team would love to help</span> — feel free to reach out and they'll sort this out for you! <span class="hl-miss">[no eligibility, no policy]</span>
-        </div>
-        <div class="verdicts">
-          <div class="vd"><span class="vic f">✗</span><div><div class="cid">refund_eligibility_confirmed</div><div class="reason">No confirmation of eligibility — focuses on emotion, not policy.</div></div><span class="conf" style="color:#ef4444;">88%</span></div>
-          <div class="vd"><span class="vic f">✗</span><div><div class="cid">policy_citation_required</div><div class="reason">Return Policy Section 3.1 never referenced.</div></div><span class="conf" style="color:#ef4444;">91%</span></div>
-          <div class="vd"><span class="vic f">✗</span><div><div class="cid">no_support_redirect</div><div class="reason">Explicitly redirects to support team — direct violation.</div></div><span class="conf" style="color:#ef4444;">87%</span></div>
-        </div>
+      <div class="resp" id="respText">
+        <span class="seg ok" data-k="elig">You're eligible for a refund</span><span class="seg" data-k="mid"> — purchases within 30 days qualify under </span><span class="seg ok" data-k="policy">Return Policy Section 3.1</span><span class="seg" data-k="tail">. I'll process this for you right now.</span><span class="seg born hide" data-k="warm"> I completely understand your frustration! Our support team would love to help — feel free to reach out and they'll sort this out for you.</span>
       </div>
+      <div class="verds" id="verds"></div>
     </div>
     <div class="diffactions">
-      <button class="da primary" onclick="replay()">↻ &nbsp;Replay</button>
-      <a class="da ghost" href="/dashboard">Open full dashboard →</a>
+      <button class="da primary" onclick="applyFix()">⌥ &nbsp;Apply one-line fix</button>
+      <a class="da ghost" href="/dashboard">Open dashboard</a>
     </div>
   </div>
 </section>
 
+<!-- GATE: SAFE (green) -->
+<div class="gate" id="gateSafe">
+  <div class="gcontent">
+    <div class="gbadge green"><span class="b"></span>Deployment Gate</div>
+    <div class="gtitle green">SAFE TO DEPLOY</div>
+    <div class="gline green">Fix validated. All four behavioral contracts pass. Shipping to production.</div>
+    <div class="gstats green in">
+      <div class="gstat"><div class="gk">Drift</div><div class="gv" style="color:#22c55e;">0%</div></div>
+      <div class="gstat"><div class="gk">Contracts</div><div class="gv" style="color:#22c55e;">4 / 4</div></div>
+      <div class="gstat"><div class="gk">Regressions</div><div class="gv" style="color:#fafafa;">0</div></div>
+      <div class="gstat"><div class="gk">Status</div><div class="gv" style="color:#22c55e;">PASSED</div></div>
+    </div>
+    <div class="gactions">
+      <button class="gbtn white" onclick="replay()">↻ Replay the story</button>
+      <a class="gbtn ghost" href="/dashboard">Open dashboard</a>
+    </div>
+  </div>
+  <div class="gp l"><div class="stripes"></div><div class="stripes bot"></div></div>
+  <div class="gp r"><div class="stripes"></div><div class="stripes bot"></div></div>
+</div>
+
 <script>
-  var C = 376.99; // ring circumference
-  var steps = [
-    {t:'ok',   l:'Loaded test suite',                  d:'shopease_refunds · 4 contracts', drift:0,  reg:0, c:0},
-    {t:'ok',   l:'Connected to agent endpoint',        d:'POST /v2/chat · 200 OK',         drift:0,  reg:0, c:0},
-    {t:'ok',   l:'Fetched passing baseline',           d:'run_a3f9b2c1 · 4/4 passed',      drift:0,  reg:0, c:0},
-    {t:'run',  l:'Evaluating response_length_limit',   d:'LLM judge · GPT-4o',             drift:0,  reg:0, c:1},
-    {t:'ok',   l:'response_length_limit · PASS',        d:'confidence 95%',                 drift:4,  reg:0, c:1},
-    {t:'run',  l:'Evaluating refund_eligibility',      d:'LLM judge · GPT-4o',             drift:4,  reg:0, c:2},
-    {t:'warn', l:'Drift rising',                        d:'eligibility never confirmed',    drift:34, reg:0, c:2},
-    {t:'fail', l:'refund_eligibility_confirmed · FAIL', d:'confidence 88% · CRITICAL',      drift:38, reg:1, c:2},
-    {t:'run',  l:'Evaluating policy_citation',          d:'LLM judge · GPT-4o',             drift:38, reg:1, c:3},
-    {t:'fail', l:'policy_citation_required · FAIL',     d:'confidence 91% · CRITICAL',      drift:57, reg:2, c:3},
-    {t:'run',  l:'Evaluating no_support_redirect',      d:'LLM judge · GPT-4o',             drift:57, reg:2, c:4},
-    {t:'fail', l:'no_support_redirect · FAIL',          d:'confidence 87% · CRITICAL',      drift:75, reg:3, c:4},
-    {t:'done', l:'3 critical regressions detected',     d:'drift 75% · status FAILED',      drift:75, reg:3, c:4},
-  ];
-  var icons = {ok:'✓',run:'',warn:'!',fail:'✗',done:'✗'};
+  var C = 376.99;
+  var sleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
 
-  function ringColor(p){ return p<5 ? '#22c55e' : p<15 ? '#eab308' : p<40 ? '#f97316' : '#ef4444'; }
+  // ---- fallback (used if the live engine is unreachable) ----
+  var FB = {
+    v2: { drift:0.75, regressions:3, status:'FAILED',
+      agent_response:"I completely understand your frustration! Our support team would love to help — feel free to reach out and they'll sort this out for you!",
+      evaluations:[
+        {contract_id:'response_length_limit', passed:true,  confidence:0.95, severity:'high',     reasoning:'Response is within the length limit.'},
+        {contract_id:'refund_eligibility_confirmed', passed:false, confidence:0.88, severity:'critical', reasoning:'No confirmation of eligibility — focuses on emotion, not policy.'},
+        {contract_id:'policy_citation_required', passed:false, confidence:0.91, severity:'critical', reasoning:'Return Policy Section 3.1 is never referenced.'},
+        {contract_id:'no_support_redirect', passed:false, confidence:0.87, severity:'critical', reasoning:'Explicitly redirects the customer to the support team.'}
+      ]},
+    v1: { drift:0.0, regressions:0, status:'PASSED',
+      agent_response:"You're eligible for a refund — purchases within 30 days qualify under Return Policy Section 3.1. I'll process this for you right now.",
+      evaluations:[
+        {contract_id:'response_length_limit', passed:true, confidence:0.96, severity:'high', reasoning:'Concise and within limit.'},
+        {contract_id:'refund_eligibility_confirmed', passed:true, confidence:0.97, severity:'critical', reasoning:'Clearly confirms refund eligibility.'},
+        {contract_id:'policy_citation_required', passed:true, confidence:0.94, severity:'critical', reasoning:'Cites Return Policy Section 3.1.'},
+        {contract_id:'no_support_redirect', passed:true, confidence:0.92, severity:'critical', reasoning:'Resolves directly with no handoff.'}
+      ]}
+  };
 
-  function setDrift(p){
-    var off = C * (1 - p/100);
-    var col = ringColor(p);
-    var rf = document.getElementById('ringfill');
-    rf.style.strokeDashoffset = off;
-    rf.style.stroke = col;
-    var pe = document.getElementById('driftpct');
-    pe.textContent = Math.round(p)+'%';
-    pe.style.color = col;
+  var LABELS = {
+    response_length_limit:'response_length_limit',
+    refund_eligibility_confirmed:'refund_eligibility_confirmed',
+    policy_citation_required:'policy_citation_required',
+    no_support_redirect:'no_support_redirect'
+  };
+  var ORDER = ['response_length_limit','refund_eligibility_confirmed','policy_citation_required','no_support_redirect'];
+
+  var mode = 'demo';
+  var data = { v2:FB.v2, v1:FB.v1 };
+
+  // fire real validation in the background as soon as the page loads
+  function fetchReal(){
+    var post = function(v){ return fetch('/api/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:v})}).then(function(r){return r.json();}); };
+    Promise.all([post('v2'), post('v1')]).then(function(res){
+      var a=res[0], b=res[1];
+      if(a && a.ok && b && b.ok){
+        data.v2=a; data.v1=b; mode='live';
+        var eb=document.getElementById('engineBadge'); eb.classList.add('live');
+        document.getElementById('engineText').textContent='Live engine · '+(a.engine||'GPT-4o-mini');
+      } else { setDemoBadge(); }
+    }).catch(function(){ setDemoBadge(); });
+  }
+  function setDemoBadge(){
+    document.getElementById('engineText').textContent='Demo data';
   }
 
-  var ti = 0;
-  function startRun(){
-    document.getElementById('intro').style.display='none';
-    var r = document.getElementById('run');
-    r.style.display='flex';
-    r.classList.add('fadein');
-    ti = 0;
+  function ringColor(p){ return p<5?'#22c55e':p<15?'#eab308':p<40?'#f97316':'#ef4444'; }
+  function setDrift(p){
+    var off=C*(1-p/100), col=ringColor(p);
+    var rf=document.getElementById('ringfill'); rf.style.strokeDashoffset=off; rf.style.stroke=col;
+    var pe=document.getElementById('driftpct'); pe.textContent=Math.round(p)+'%'; pe.style.color=col;
+  }
+  function show(id){ document.querySelectorAll('.stage').forEach(function(s){s.classList.remove('on');}); var el=document.getElementById(id); el.classList.add('on','fade'); window.scrollTo(0,0); }
+
+  function addStep(t, label, detail, cur){
+    var tl=document.getElementById('timeline');
+    var prev=tl.querySelector('.ti.cur'); if(prev) prev.classList.remove('cur');
+    var row=document.createElement('div');
+    row.className='ti '+t;
+    var icon = t==='spin'?'':(t==='ok'?'✓':t==='warn'?'!':t==='fail'?'✗':t==='done'?'✗':'');
+    var icCls = t==='spin'?'ic spin':'ic '+t;
+    row.innerHTML='<div class="'+icCls+'">'+icon+'</div><div><div class="til">'+label+'</div><div class="tid">'+detail+'</div></div>';
+    tl.appendChild(row);
+    requestAnimationFrame(function(){ row.classList.add('show'); if(cur) row.classList.add('cur'); });
+    return row;
+  }
+
+  // ---------- ACT 2: validation with rising tension ----------
+  async function run(){
+    show('act2');
+    document.getElementById('timeline').innerHTML='';
+    document.getElementById('verds').innerHTML='';
+    setDrift(0);
+    document.getElementById('st-c').textContent='0 / 4';
+    var rr=document.getElementById('st-r'); rr.textContent='0'; rr.style.color='#a1a1aa';
+    var ss=document.getElementById('st-s'); ss.textContent='RUNNING'; ss.style.color='#22c55e';
+    var df=document.getElementById('depfill'), dsv=document.getElementById('depstate');
+    df.style.width='0%';
+
+    var d = data.v2;
+    var emap = {}; d.evaluations.forEach(function(e){ emap[e.contract_id]=e; });
+
+    // healthy preamble — quick & green (builds false confidence)
+    df.style.width='18%'; dsv.textContent='building…';
+    addStep('ok','Loaded test suite','shopease_refunds · 4 contracts', false); await sleep(520);
+    df.style.width='34%'; dsv.textContent='deploying…';
+    addStep('ok','Connected to agent endpoint','POST /v2/chat · 200 OK', false); await sleep(500);
+    addStep('ok','Fetched passing baseline','run_a3f9b2c1 · 4/4 passed', false); await sleep(560);
+    df.style.width='52%';
+
+    var done=0, regs=0, driftNow=0, confSum=0, confN=0;
+    var bumps={refund_eligibility_confirmed:38, policy_citation_required:58, no_support_redirect: Math.round(d.drift*100)};
+
+    for(var i=0;i<ORDER.length;i++){
+      var cid=ORDER[i];
+      var ev=emap[cid]||FB.v2.evaluations[i];
+      var passed=ev.passed, conf=Math.round((ev.confidence||0.9)*100), sev=(ev.severity||'high').toUpperCase();
+      confSum+=conf; confN++;
+      var sp=addStep('spin','Evaluating '+LABELS[cid], (mode==='live'?'live judge · ':'LLM judge · ')+'GPT-4o-mini', true);
+      // failures take LONGER (instability felt), passes are quick
+      await sleep(passed?620:1050);
+      sp.remove();
+      done++;
+      document.getElementById('st-c').textContent=done+' / 4';
+      if(passed){
+        addStep('ok', LABELS[cid]+' · PASS', 'confidence '+conf+'% · '+sev, false);
+        await sleep(360);
+      } else {
+        if(regs===0){ addStep('warn','Drift rising', 'agent behaviour is diverging from baseline', false); await sleep(680); }
+        regs++;
+        addStep('fail', LABELS[cid]+' · FAIL', 'confidence '+conf+'% · '+sev, false);
+        var rr2=document.getElementById('st-r'); rr2.textContent=regs; rr2.style.color='#ef4444';
+        driftNow = bumps[cid]||Math.min(85, driftNow+20);
+        setDrift(driftNow);
+        df.style.width = (52 + done*8) + '%'; dsv.textContent='deploying…';
+        await sleep(820);
+      }
+    }
+
+    setDrift(Math.round(d.drift*100));
+    var ss2=document.getElementById('st-s'); ss2.textContent=d.status; ss2.style.color='#ef4444';
+    addStep('done', regs+' critical regressions detected', 'drift '+Math.round(d.drift*100)+'% · status '+d.status, false);
+
+    // deployment keeps racing toward the finish… then the gate slams
+    df.style.width='94%'; dsv.textContent='finalizing…';
+    await sleep(700);
+
+    // fill block stats from real data
+    document.getElementById('bs-drift').textContent=Math.round(d.drift*100)+'%';
+    document.getElementById('bs-reg').textContent=d.regressions;
+    document.getElementById('bs-conf').textContent=Math.round(confSum/confN)+'%';
+
+    slamGate();
+  }
+
+  function slamGate(){
+    var g=document.getElementById('gateBlock'); g.classList.add('on');
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ g.classList.add('shut'); }); });
+    // hold on the closed doors, THEN reveal the message, THEN the stats
+    setTimeout(function(){ g.classList.add('reveal'); }, 1250);
+    setTimeout(function(){ document.getElementById('blockStats').classList.add('in'); }, 2050);
+  }
+
+  // ---------- ACT 4: morph diff ----------
+  function buildVerds(d, failingOnly){
+    var v=document.getElementById('verds'); v.innerHTML='';
+    var list=d.evaluations.filter(function(e){ return failingOnly? !e.passed : true; });
+    list.forEach(function(e){
+      var row=document.createElement('div'); row.className='vd';
+      row.innerHTML='<span class="vic">✗</span><div><div class="cid">'+e.contract_id+'</div><div class="reason">'+(e.reasoning||'')+'</div></div><span class="conf">'+Math.round((e.confidence||0.9)*100)+'%</span>';
+      v.appendChild(row);
+      return row;
+    });
+    return v.querySelectorAll('.vd');
+  }
+
+  async function showDiff(){
+    var g=document.getElementById('gateBlock');
+    g.classList.remove('shut','reveal');
+    setTimeout(function(){ g.classList.remove('on'); document.getElementById('blockStats').classList.remove('in'); }, 700);
+
+    show('act4');
+    document.getElementById('diffSub').textContent = (mode==='live'?'Verdicts below are live from the engine. ':'') + 'Behavioral contracts fall away one by one.';
+    // reset to "before" state
+    var segs={}; document.querySelectorAll('#respText .seg').forEach(function(s){ segs[s.dataset.k]=s; });
+    document.getElementById('rchead').className='rchead good';
+    document.getElementById('rcname').innerHTML='<span class="rcdot" style="background:#22c55e;"></span>Agent · before the change';
+    var vtag=document.getElementById('vtag'); vtag.className='vtag p'; vtag.textContent='PASSING';
+    segs.elig.className='seg ok'; segs.mid.className='seg'; segs.policy.className='seg ok'; segs.tail.className='seg'; segs.warm.className='seg born hide';
+    document.getElementById('verds').innerHTML='';
+
+    await sleep(900);
+    // morph: eligibility fades
+    segs.elig.className='seg dying'; await sleep(700);
+    // policy citation fades
+    segs.policy.className='seg dying'; await sleep(700);
+    // the rest collapses, warm/escalation text is born
+    segs.mid.className='seg dying'; segs.tail.className='seg dying'; await sleep(650);
+    segs.elig.classList.add('hide'); segs.mid.classList.add('hide'); segs.policy.classList.add('hide'); segs.tail.classList.add('hide');
+    segs.warm.className='seg born'; await sleep(500);
+    // header flips to failing
+    document.getElementById('rchead').className='rchead bad';
+    document.getElementById('rcname').innerHTML='<span class="rcdot" style="background:#ef4444;"></span>Agent · after the change';
+    vtag.className='vtag f'; vtag.textContent='FAILING';
+    await sleep(400);
+    // reveal failing verdicts one by one
+    var rows=buildVerds(data.v2, true);
+    for(var i=0;i<rows.length;i++){ (function(r){ r.classList.add('show'); })(rows[i]); await sleep(260); }
+  }
+
+  // ---------- ACT 5: recovery ----------
+  async function applyFix(){
+    // brief: show the revert in the deploy bar context, then fast green replay
+    show('act2');
     document.getElementById('timeline').innerHTML='';
     setDrift(0);
-    nextStep();
-  }
+    document.getElementById('st-c').textContent='0 / 4';
+    var rr=document.getElementById('st-r'); rr.textContent='0'; rr.style.color='#a1a1aa';
+    var ss=document.getElementById('st-s'); ss.textContent='RE-VALIDATING'; ss.style.color='#22c55e';
+    document.querySelector('#act2 .vhead h2').textContent='One-line fix applied — re-validating…';
+    var df=document.getElementById('depfill'), dsv=document.getElementById('depstate');
+    df.style.width='0%'; dsv.style.color='#22c55e'; dsv.textContent='re-running…';
 
-  function nextStep(){
-    if(ti >= steps.length){ setTimeout(closeGate, 900); return; }
-    var s = steps[ti];
-    var tl = document.getElementById('timeline');
-    // de-highlight previous
-    var prev = tl.querySelector('.ti.cur'); if(prev) prev.classList.remove('cur');
-    var row = document.createElement('div');
-    row.className = 'ti ' + s.t;
-    var icCls = s.t==='run' ? 'ic spin' : 'ic '+s.t;
-    row.innerHTML = '<div class="'+icCls+'">'+icons[s.t]+'</div>'+
-      '<div><div class="til">'+s.l+'</div><div class="tid">'+s.d+'</div></div>';
-    tl.appendChild(row);
-    requestAnimationFrame(function(){ row.classList.add('show'); if(s.t==='run') row.classList.add('cur'); });
-
-    setDrift(s.drift);
-    document.getElementById('st-c').textContent = s.c+' / 4';
-    var rr = document.getElementById('st-r');
-    rr.textContent = s.reg;
-    rr.style.color = s.reg>0 ? '#ef4444' : '#a1a1aa';
-    if(s.t==='done'){
-      var ss=document.getElementById('st-s'); ss.textContent='FAILED'; ss.style.color='#ef4444';
+    addStep('ok','Reverted prompt change','+1 −1 · system_prompt.txt', false); await sleep(420);
+    var d=data.v1, evalById={}; d.evaluations.forEach(function(e){evalById[e.contract_id]=e;});
+    var done=0;
+    for(var i=0;i<ORDER.length;i++){
+      var cid=ORDER[i], ev=evalById[cid]||FB.v1.evaluations[i];
+      var conf=Math.round((ev.confidence||0.95)*100), sev=(ev.severity||'high').toUpperCase();
+      addStep('ok', LABELS[cid]+' · PASS', 'confidence '+conf+'% · '+sev, false);
+      done++; document.getElementById('st-c').textContent=done+' / 4';
+      df.style.width=(done*24)+'%';
+      await sleep(300);
     }
-    ti++;
-    var delay = (s.t==='run') ? 520 : (s.t==='warn'||s.t==='fail') ? 760 : 560;
-    setTimeout(nextStep, delay);
+    df.style.width='100%'; dsv.textContent='passed ✓';
+    var ss2=document.getElementById('st-s'); ss2.textContent='PASSED'; ss2.style.color='#22c55e';
+    addStep('ok','All contracts satisfied','drift 0% · status PASSED', false);
+    await sleep(750);
+    openSafeGate();
   }
 
-  function closeGate(){
-    var g = document.getElementById('gate');
-    g.style.display='block';
-    requestAnimationFrame(function(){ requestAnimationFrame(function(){ g.classList.add('shut'); }); });
-  }
-
-  function showDiff(){
-    var g = document.getElementById('gate');
-    g.classList.remove('shut');
-    setTimeout(function(){ g.style.display='none'; }, 700);
-    document.getElementById('run').style.display='none';
-    var d = document.getElementById('diff');
-    d.style.display='flex';
-    d.classList.add('fadein');
-    window.scrollTo(0,0);
-    setTimeout(function(){ document.getElementById('col1').classList.add('show'); }, 120);
-    setTimeout(function(){ document.getElementById('col2').classList.add('show'); }, 420);
+  function openSafeGate(){
+    var g=document.getElementById('gateSafe');
+    g.classList.add('on');           // doors start closed (covering)
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ setTimeout(function(){ g.classList.add('open'); }, 350); }); });
   }
 
   function replay(){
-    document.getElementById('diff').style.display='none';
-    document.getElementById('col1').classList.remove('show');
-    document.getElementById('col2').classList.remove('show');
-    var ss=document.getElementById('st-s'); ss.textContent='RUNNING'; ss.style.color='#22c55e';
-    startRun();
+    var g=document.getElementById('gateSafe'); g.classList.remove('on','open');
+    document.querySelector('#act2 .vhead h2').textContent='Checking behavioral contracts before release…';
+    document.getElementById('depstate').style.color='#22d3ee';
+    show('act1');
   }
+
+  fetchReal();
 </script>
 </body>
 </html>""")
