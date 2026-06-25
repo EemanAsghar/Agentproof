@@ -146,6 +146,176 @@ Keep it conversational and do not worry too much about policies."""
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    # ── Bring-your-own-agent: zero-config onboarding (used by /test) ───────────
+    _ALLOWED_TYPES = {
+        "contains_intent", "does_not_contain", "sentiment",
+        "response_length", "format_compliance", "safety",
+    }
+
+    async def _call_agent(endpoint: str, message: str, auth_header: str | None, input_field: str | None):
+        """Call an arbitrary agent endpoint and extract a text reply (flexible shapes)."""
+        import httpx
+        headers = {"Content-Type": "application/json"}
+        if auth_header:
+            headers["Authorization"] = auth_header
+        req_keys = [input_field] if input_field else []
+        req_keys += [k for k in ("message", "input", "query", "prompt", "text") if k not in req_keys]
+        resp_keys = ("response", "message", "output", "text", "reply", "answer", "content", "result")
+        last_err = None
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for key in req_keys:
+                try:
+                    r = await client.post(endpoint, headers=headers, json={key: message})
+                    if r.status_code >= 400:
+                        last_err = f"HTTP {r.status_code}"
+                        continue
+                    try:
+                        data = r.json()
+                    except Exception:
+                        return r.text
+                    if isinstance(data, str):
+                        return data
+                    if isinstance(data, dict):
+                        for rk in resp_keys:
+                            v = data.get(rk)
+                            if isinstance(v, str) and v.strip():
+                                return v
+                        return json.dumps(data)
+                    return str(data)
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+        raise RuntimeError(f"Could not reach the agent or parse a text reply ({last_err})")
+
+    class GenSuiteReq(BaseModel):
+        description: str
+        agent_name: str | None = "Your Agent"
+
+    @app.post("/api/generate-suite")
+    async def generate_suite(req: GenSuiteReq):
+        """Turn a plain-English behaviour description into behavioral contracts (AI-authored)."""
+        try:
+            sys = (
+                "You generate behavioral test suites for AI agents. "
+                "A behavioral contract is a rule the agent's response must satisfy. "
+                "Output STRICT JSON only, no markdown. Schema:\n"
+                '{"test_cases":[{"test_id":"snake_case","name":"short title",'
+                '"input":"a realistic user message to send the agent","severity":"critical|high|medium|low",'
+                '"contracts":[{"contract_id":"c1","type":"<type>","value":"plain-English rule",'
+                '"severity":"critical|high|medium|low"}]}]}\n'
+                "Allowed contract types ONLY: contains_intent, does_not_contain, sentiment, "
+                "response_length, format_compliance, safety. "
+                "For response_length, value must be a number-as-string (max words). "
+                "Generate 4 diverse, realistic test cases with 1-2 contracts each."
+            )
+            user = f"Agent: {req.agent_name}\nExpected behaviour:\n{req.description}"
+            comp = _get_client().chat.completions.create(
+                model="openai/gpt-4o-mini", max_tokens=1400,
+                response_format={"type": "json_object"},
+                messages=[{"role": "system", "content": sys}, {"role": "user", "content": user}],
+            )
+            raw = comp.choices[0].message.content.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            data = json.loads(raw.strip())
+
+            cases = []
+            for i, tc in enumerate(data.get("test_cases", [])[:6]):
+                contracts = []
+                for j, c in enumerate(tc.get("contracts", [])[:3]):
+                    if c.get("type") not in _ALLOWED_TYPES:
+                        continue
+                    contracts.append({
+                        "contract_id": c.get("contract_id") or f"c{i+1}_{j+1}",
+                        "type": c["type"],
+                        "value": str(c.get("value", "")),
+                        "severity": c.get("severity", "medium"),
+                    })
+                if not contracts:
+                    continue
+                cases.append({
+                    "test_id": tc.get("test_id") or f"test_{i+1}",
+                    "name": tc.get("name") or f"Test {i+1}",
+                    "input": tc.get("input", ""),
+                    "severity": tc.get("severity", "medium"),
+                    "contracts": contracts,
+                })
+            if not cases:
+                return {"ok": False, "error": "Could not generate valid contracts — try a more specific description."}
+            return {"ok": True, "test_cases": cases}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    class RunCaseReq(BaseModel):
+        endpoint: str
+        test_case: dict
+        auth_header: str | None = None
+        input_field: str | None = "message"
+
+    @app.post("/api/run-case")
+    async def run_case(req: RunCaseReq):
+        """Run ONE test case live against the user's agent (short, timeout-safe per call)."""
+        try:
+            from agentproof.contracts import BehavioralContract
+            from agentproof.validator import evaluate_contracts, is_overall_pass
+            tc = req.test_case
+            agent_response = await _call_agent(
+                req.endpoint, tc["input"], req.auth_header, req.input_field)
+            contracts = [BehavioralContract(**c) for c in tc.get("contracts", [])]
+            evals = evaluate_contracts(tc["input"], agent_response, contracts)
+            overall = is_overall_pass(evals, contracts)
+            return {
+                "ok": True,
+                "test_id": tc.get("test_id"), "test_name": tc.get("name"),
+                "severity": tc.get("severity", "medium"),
+                "agent_response": agent_response,
+                "overall_pass": overall,
+                "contract_evaluations": [
+                    {"contract_id": e.contract_id, "passed": e.passed,
+                     "confidence": round(e.confidence, 2), "reasoning": e.reasoning}
+                    for e in evals
+                ],
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    class SaveByoReq(BaseModel):
+        suite_id: str
+        results: list[dict]
+
+    @app.post("/api/save-run")
+    async def save_byo_run(req: SaveByoReq):
+        """Persist a bring-your-own-agent run so it appears on the dashboard."""
+        try:
+            from agentproof.contracts import TestResult, ContractEvaluation
+            from agentproof.regression import compute_drift_score
+            from agentproof.db import save_run, get_baseline
+
+            results = [
+                TestResult(
+                    test_id=r["test_id"], test_name=r["test_name"], severity=r["severity"],
+                    agent_response=r["agent_response"],
+                    contract_evaluations=[ContractEvaluation(**e) for e in r["contract_evaluations"]],
+                    overall_pass=r["overall_pass"],
+                )
+                for r in req.results
+            ]
+            total = sum(_SEV_W.get(r.severity, 1.0) for r in results)
+            failed = sum(_SEV_W.get(r.severity, 1.0) for r in results if not r.overall_pass)
+            score = round(failed / total, 4) if total else 0.0
+            crit_fail = any((not r.overall_pass) and r.severity == "critical" for r in results)
+            status = "FAILED" if (crit_fail or score >= 0.25) else "DEGRADED" if score > 0.001 else "PASSED"
+            baseline = get_baseline(req.suite_id) or []
+            _, regressions = compute_drift_score(results, baseline)
+            run_id = save_run(
+                suite_id=req.suite_id, results=results,
+                drift_score=score, status=status, regressions=regressions)
+            return {"ok": True, "run_id": run_id, "status": status, "score": score}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def _status_color(status: str) -> str:
         return {"PASSED": "#22c55e", "DEGRADED": "#eab308", "FAILED": "#ef4444"}.get(status, "#71717a")
 
@@ -431,8 +601,8 @@ Keep it conversational and do not worry too much about policies."""
       </div>
       <div class="nlinks">
         <a href="/live">Live Demo</a>
+        <a href="/test">Test your agent</a>
         <a href="#lifecycle">How it works</a>
-        <a href="#features">Features</a>
         <a href="/dashboard">Dashboard</a>
       </div>
     </div>
@@ -460,8 +630,8 @@ Keep it conversational and do not worry too much about policies."""
       AgentProof continuously validates behavioral contracts, detects regressions, and gives enterprises the confidence to ship AI systems at scale.
     </p>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:52px;">
-      <a href="/live" class="btn bo bl">▶ &nbsp;Watch it run live</a>
-      <a href="/dashboard" class="btn bg bl">Open Dashboard</a>
+      <a href="/test" class="btn bo bl">Test your agent →</a>
+      <a href="/live" class="btn bg bl">▶ &nbsp;Watch it run live</a>
     </div>
 
     <div class="term" id="heroTerm">
@@ -1371,6 +1541,335 @@ Keep it conversational and do not worry too much about policies."""
   }
 
   fetchReal();
+</script>
+</body>
+</html>""")
+
+    @app.get("/test", response_class=HTMLResponse)
+    async def test_your_agent():
+        return HTMLResponse(r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="icon" type="image/png" href="/logo.png"/>
+  <title>Test your agent — AgentProof</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{--bg:#09090b;--bg2:#111113;--bg3:#18181b;--br:#1f1f23;--br2:#2e2e32;
+      --t1:#fafafa;--t2:#a1a1aa;--t3:#52525b;--or:#f97316;--gr:#22c55e;--rd:#ef4444;--yl:#eab308;
+      --mono:'SF Mono','Fira Code',ui-monospace,monospace;}
+    body{background:var(--bg);color:var(--t1);font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;}
+    a{text-decoration:none;color:inherit;}
+    .bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:56px;background:rgba(9,9,11,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);}
+    .logo{display:flex;align-items:center;gap:9px;}
+    .ln{font-weight:700;font-size:15px;}
+    .blink{font-size:12.5px;color:var(--t2);padding:6px 12px;border:1px solid var(--br2);border-radius:6px;}
+    .wrap{max-width:780px;margin:0 auto;padding:42px 28px 80px;}
+    .kick{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--or);background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.22);border-radius:20px;padding:4px 13px;margin-bottom:20px;}
+    .kd{width:6px;height:6px;border-radius:50%;background:var(--or);animation:pulse 1.6s infinite;}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    h1{font-size:40px;font-weight:800;letter-spacing:-1.6px;line-height:1.1;margin-bottom:12px;}
+    .lead{font-size:16px;color:var(--t2);line-height:1.6;max-width:560px;margin-bottom:28px;}
+    .tabs{display:flex;gap:6px;margin-bottom:18px;}
+    .tab{font-size:13px;font-weight:600;padding:8px 15px;border-radius:8px;border:1px solid var(--br2);color:var(--t2);cursor:pointer;}
+    .tab.on{background:var(--bg3);color:var(--t1);border-color:var(--t3);}
+    .tab.soon{opacity:.55;cursor:default;}
+    .card{background:var(--bg2);border:1px solid var(--br);border-radius:14px;padding:24px;margin-bottom:16px;}
+    .step{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+    .snum{width:24px;height:24px;border-radius:50%;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.25);color:var(--or);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;}
+    .stitle{font-size:15px;font-weight:700;}
+    label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--t3);margin:0 0 7px;}
+    input,textarea{width:100%;background:var(--bg);border:1px solid var(--br2);border-radius:9px;color:var(--t1);font-size:14px;padding:11px 13px;font-family:inherit;outline:none;transition:border-color .15s;}
+    input:focus,textarea:focus{border-color:var(--or);}
+    input::placeholder,textarea::placeholder{color:var(--t3);}
+    .mono{font-family:var(--mono);}
+    textarea{min-height:90px;resize:vertical;line-height:1.6;}
+    .row{margin-bottom:16px;}
+    .adv{font-size:12.5px;color:var(--t3);cursor:pointer;user-select:none;margin-bottom:12px;display:inline-block;}
+    .adv:hover{color:var(--t2);}
+    .advbox{display:none;gap:12px;}
+    .advbox.on{display:grid;grid-template-columns:1fr 1fr;}
+    .btn{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:700;padding:12px 22px;border:none;border-radius:9px;cursor:pointer;transition:transform .12s,background .12s,opacity .12s;}
+    .btn:disabled{opacity:.5;cursor:default;}
+    .btn.primary{background:var(--or);color:#fff;}
+    .btn.primary:hover:not(:disabled){background:#ea6c00;transform:translateY(-1px);}
+    .btn.go{background:var(--gr);color:#04130a;}
+    .btn.go:hover:not(:disabled){transform:translateY(-1px);}
+    .btn.ghost{background:none;border:1px solid var(--br2);color:var(--t2);}
+    .btn.ghost:hover{color:var(--t1);border-color:var(--t3);}
+    .hintlink{font-size:12.5px;color:var(--or);cursor:pointer;margin-left:12px;}
+    .err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.28);color:#fca5a5;font-size:13px;padding:11px 14px;border-radius:9px;margin-top:12px;font-family:var(--mono);}
+    .muted{color:var(--t3);font-size:12.5px;}
+    .hidden{display:none;}
+    .spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite;display:inline-block;}
+    @keyframes rot{to{transform:rotate(360deg)}}
+    /* generated contracts */
+    .gc{border:1px solid var(--br);border-radius:11px;padding:14px 16px;margin-bottom:10px;background:var(--bg);}
+    .gctop{display:flex;align-items:center;gap:9px;margin-bottom:6px;}
+    .gcname{font-size:14px;font-weight:600;}
+    .gcsev{margin-left:auto;font-size:9.5px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;color:var(--t3);}
+    .gcinput{font-size:12.5px;color:var(--t2);font-family:var(--mono);margin-bottom:9px;}
+    .gcc{display:flex;gap:8px;padding:5px 0;font-size:12.5px;color:var(--t2);}
+    .gcc .ty{font-family:var(--mono);color:var(--or);font-size:11px;flex-shrink:0;}
+    /* timeline */
+    .ti{display:flex;align-items:flex-start;gap:12px;padding:11px 13px;border-radius:9px;opacity:0;transform:translateY(8px);animation:tin .35s ease forwards;}
+    @keyframes tin{to{opacity:1;transform:none}}
+    .ti.cur{background:var(--bg);}
+    .tic{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-top:1px;}
+    .tic.ok{background:rgba(34,197,94,.14);color:var(--gr);} .tic.fail{background:rgba(239,68,68,.14);color:var(--rd);}
+    .tic.run{border:2px solid var(--br2);border-top-color:var(--or);animation:rot .7s linear infinite;}
+    .tit{font-size:14px;font-weight:600;} .tid{font-size:11.5px;color:var(--t3);font-family:var(--mono);margin-top:2px;}
+    /* result */
+    .ring{position:relative;width:120px;height:120px;margin:0 auto;}
+    .ring svg{transform:rotate(-90deg);}
+    .ring .n{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+    .ring .v{font-size:30px;font-weight:800;font-family:var(--mono);} .ring .l{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1.4px;margin-top:3px;}
+    .reco{display:flex;align-items:center;gap:14px;border-radius:12px;padding:18px 20px;margin:16px 0;}
+    .recl{font-size:18px;font-weight:800;letter-spacing:-.5px;} .recs{font-size:13px;color:var(--t2);margin-top:2px;}
+    .tcase{background:var(--bg);border:1px solid var(--br);border-left-width:3px;border-radius:11px;padding:16px;margin-bottom:12px;}
+    .tchead{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+    .pill{font-size:10.5px;font-family:var(--mono);font-weight:700;padding:2px 9px;border-radius:5px;}
+    .pill.p{background:rgba(34,197,94,.14);color:var(--gr);} .pill.f{background:rgba(239,68,68,.14);color:var(--rd);}
+    .bub{background:var(--bg3);border:1px solid var(--br);border-radius:4px 10px 10px 10px;padding:11px 14px;font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:12px;}
+    .ev{display:flex;gap:11px;padding:9px 0;border-top:1px solid var(--br);}
+    .evic{width:18px;height:18px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;}
+    .evic.ok{background:rgba(34,197,94,.14);color:var(--gr);} .evic.f{background:rgba(239,68,68,.14);color:var(--rd);}
+    .evr{font-size:13px;color:var(--t1);} .evcid{font-size:11px;font-family:var(--mono);color:var(--t3);margin-bottom:2px;}
+    .evc{margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--t3);flex-shrink:0;}
+  </style>
+</head>
+<body>
+<div class="bar">
+  <a href="/" class="logo"><img src="/logo.png" alt="AgentProof" style="width:30px;height:30px;border-radius:7px;display:block;"/><span class="ln">AgentProof</span></a>
+  <a href="/dashboard" class="blink">Dashboard →</a>
+</div>
+
+<div class="wrap">
+  <div class="kick"><span class="kd"></span>Bring your own agent</div>
+  <h1>Test any agent in under a minute.</h1>
+  <p class="lead">Point AgentProof at your agent, describe what it should do in plain English, and let AI write the behavioral contracts. No JSON, no config — just click Validate and watch it run.</p>
+
+  <div class="tabs">
+    <div class="tab on">Paste endpoint</div>
+    <div class="tab soon" title="Coming soon">Connect UiPath tenant · soon</div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="card">
+    <div class="step"><span class="snum">1</span><span class="stitle">Connect your agent</span></div>
+    <div class="row">
+      <label>Agent endpoint URL</label>
+      <input id="endpoint" class="mono" placeholder="https://your-agent.com/chat"/>
+    </div>
+    <div class="adv" id="advToggle">⚙ Advanced (auth header, request field)</div>
+    <div class="advbox" id="advBox">
+      <div><label>Auth header (optional)</label><input id="auth" class="mono" placeholder="Bearer ..."/></div>
+      <div><label>Request field</label><input id="field" class="mono" value="message"/></div>
+    </div>
+    <div class="row" style="margin-top:16px;">
+      <label>What should this agent do? (plain English)</label>
+      <textarea id="desc" placeholder="e.g. A customer-support agent for an online store. It must confirm refund eligibility for purchases within 30 days, cite the return policy, stay under 100 words, and never tell the customer to contact a human for simple refunds."></textarea>
+    </div>
+    <button class="btn primary" id="genBtn">✨ Generate contracts</button>
+    <span class="hintlink" id="demoLink">or try it on our demo agent</span>
+    <div id="genErr"></div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="card hidden" id="step2">
+    <div class="step"><span class="snum">2</span><span class="stitle">AI-generated behavioral contracts</span></div>
+    <p class="muted" style="margin-bottom:16px;">Review what AgentProof will check. These were written from your description.</p>
+    <div id="contracts"></div>
+    <div style="display:flex;gap:10px;margin-top:8px;">
+      <button class="btn go" id="runBtn">▶ Validate agent</button>
+      <button class="btn ghost" id="regenBtn">↻ Regenerate</button>
+    </div>
+    <div id="runErr"></div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="card hidden" id="step3">
+    <div class="step"><span class="snum">3</span><span class="stitle" id="s3title">Validating…</span></div>
+    <div id="timeline"></div>
+    <div id="result" class="hidden"></div>
+  </div>
+</div>
+
+<script>
+  var $ = function(id){ return document.getElementById(id); };
+  var C120 = 2*Math.PI*52;
+  var suite = null, suiteId = null, results = [];
+
+  $('advToggle').onclick = function(){ $('advBox').classList.toggle('on'); };
+  $('demoLink').onclick = function(){
+    $('endpoint').value = window.location.origin + '/v2/chat';
+    $('field').value = 'message';
+    $('desc').value = "A customer-support agent for ShopEasy. It must confirm refund eligibility for purchases within 30 days, cite the Return Policy (Section 3.1), keep replies under 100 words, and never tell the customer to contact the support team for a simple refund.";
+  };
+
+  function slug(s){ return (s||'agent').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,32) || 'agent'; }
+  function err(el,msg){ $(el).innerHTML = '<div class="err">'+msg+'</div>'; }
+  function clearErr(el){ $(el).innerHTML=''; }
+
+  function sevWeight(s){ return {critical:3,high:2,medium:1,low:0.5}[s]||1; }
+
+  $('genBtn').onclick = generate;
+  $('regenBtn').onclick = generate;
+
+  async function generate(){
+    clearErr('genErr');
+    var desc = $('desc').value.trim();
+    var ep = $('endpoint').value.trim();
+    if(!ep){ err('genErr','Enter your agent endpoint URL first.'); return; }
+    if(desc.length < 15){ err('genErr','Describe what the agent should do (a sentence or two).'); return; }
+    var b = $('genBtn'); var old = b.innerHTML; b.disabled=true; b.innerHTML='<span class="spin"></span> Generating…';
+    try{
+      var r = await fetch('/api/generate-suite',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({description:desc, agent_name:slug(ep)})});
+      var j = await r.json();
+      if(!j.ok){ err('genErr', j.error||'Generation failed.'); return; }
+      suite = j.test_cases; suiteId = 'byo_'+slug(ep);
+      renderContracts(suite);
+      $('step2').classList.remove('hidden');
+      $('step2').scrollIntoView({behavior:'smooth',block:'start'});
+    }catch(e){ err('genErr', String(e)); }
+    finally{ b.disabled=false; b.innerHTML=old; }
+  }
+
+  function renderContracts(cases){
+    var html='';
+    cases.forEach(function(tc){
+      var cs='';
+      tc.contracts.forEach(function(c){
+        cs += '<div class="gcc"><span class="ty">'+c.type+'</span><span>'+c.value+'</span></div>';
+      });
+      html += '<div class="gc"><div class="gctop"><span class="gcname">'+tc.name+'</span>'+
+              '<span class="gcsev">'+tc.severity+'</span></div>'+
+              '<div class="gcinput">↳ "'+tc.input+'"</div>'+cs+'</div>';
+    });
+    $('contracts').innerHTML = html;
+  }
+
+  $('runBtn').onclick = runAll;
+
+  function addTi(cls, title, detail, cur){
+    var row=document.createElement('div'); row.className='ti'+(cur?' cur':'');
+    var icon = cls==='run'?'':cls==='ok'?'✓':'✗';
+    row.innerHTML='<div class="tic '+cls+'">'+icon+'</div><div><div class="tit">'+title+'</div><div class="tid">'+detail+'</div></div>';
+    $('timeline').appendChild(row); return row;
+  }
+
+  async function runAll(){
+    clearErr('runErr');
+    results = [];
+    $('step3').classList.remove('hidden');
+    $('result').classList.add('hidden'); $('result').innerHTML='';
+    $('timeline').innerHTML='';
+    $('s3title').textContent='Validating live against your agent…';
+    $('runBtn').disabled=true;
+    $('step3').scrollIntoView({behavior:'smooth',block:'start'});
+
+    var payloadBase = { endpoint:$('endpoint').value.trim(), auth_header:$('auth').value.trim()||null, input_field:$('field').value.trim()||'message' };
+
+    for(var i=0;i<suite.length;i++){
+      var tc = suite[i];
+      var row = addTi('run','Evaluating '+tc.name, 'calling your agent + LLM judge', true);
+      try{
+        var r = await fetch('/api/run-case',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(Object.assign({test_case:tc}, payloadBase))});
+        var j = await r.json();
+        row.classList.remove('cur');
+        if(!j.ok){
+          row.querySelector('.tic').className='tic fail'; row.querySelector('.tic').textContent='✗';
+          row.querySelector('.tit').textContent = tc.name+' · error';
+          row.querySelector('.tid').textContent = j.error||'failed';
+          err('runErr','Could not reach your agent: '+(j.error||'unknown')+'. Check the URL / request field in Advanced.');
+          continue;
+        }
+        results.push(j);
+        var cls = j.overall_pass?'ok':'fail';
+        row.querySelector('.tic').className='tic '+cls;
+        row.querySelector('.tic').textContent = j.overall_pass?'✓':'✗';
+        row.querySelector('.tit').textContent = tc.name+' · '+(j.overall_pass?'PASS':'FAIL');
+        var failed = j.contract_evaluations.filter(function(e){return !e.passed;}).length;
+        row.querySelector('.tid').textContent = j.contract_evaluations.length+' contracts · '+failed+' failed';
+      }catch(e){
+        row.classList.remove('cur');
+        row.querySelector('.tic').className='tic fail'; row.querySelector('.tic').textContent='✗';
+        row.querySelector('.tit').textContent = tc.name+' · error';
+        row.querySelector('.tid').textContent = String(e);
+      }
+    }
+    $('runBtn').disabled=false;
+    renderResult();
+  }
+
+  function renderResult(){
+    $('s3title').textContent='Validation report';
+    if(!results.length){ return; }
+    var total=0, failed=0, critFail=false;
+    results.forEach(function(r){
+      var w=sevWeight(r.severity); total+=w;
+      if(!r.overall_pass){ failed+=w; if(r.severity==='critical') critFail=true; }
+    });
+    var score = total? failed/total : 0;
+    var pct = Math.round(score*100);
+    var col = pct<1?'#22c55e':pct<25?'#eab308':'#ef4444';
+    var status = critFail||pct>=25 ? 'FAILED' : pct>0.5?'DEGRADED':'PASSED';
+    var statusCol = status==='PASSED'?'#22c55e':status==='DEGRADED'?'#eab308':'#ef4444';
+    var recoTitle = status==='PASSED'?'Safe to deploy':status==='DEGRADED'?'Review before deploy':'Deployment blocked';
+    var recoSub = status==='PASSED'?'All behavioral contracts satisfied.':status==='DEGRADED'?'Some contracts failed — review the report.':'Critical contracts failed — do not ship.';
+    var off = C120*(1-Math.min(pct,100)/100);
+
+    var nPass = results.filter(function(r){return r.overall_pass;}).length;
+    var html = '';
+    html += '<div style="display:grid;grid-template-columns:130px 1fr;gap:22px;align-items:center;margin-bottom:8px;">';
+    html += '<div class="ring"><svg width="120" height="120"><circle cx="60" cy="60" r="52" fill="none" stroke="#1f1f23" stroke-width="10"/>'+
+            '<circle cx="60" cy="60" r="52" fill="none" stroke="'+col+'" stroke-width="10" stroke-linecap="round" stroke-dasharray="'+C120.toFixed(1)+'" stroke-dashoffset="'+C120.toFixed(1)+'" style="transition:stroke-dashoffset 1s ease" id="rf"/></svg>'+
+            '<div class="n"><div class="v" style="color:'+col+'">'+pct+'%</div><div class="l">fail rate</div></div></div>';
+    html += '<div><div class="reco" style="background:'+statusCol+'14;border:1px solid '+statusCol+'40;">'+
+            '<span style="width:10px;height:10px;border-radius:50%;background:'+statusCol+';box-shadow:0 0 12px '+statusCol+';"></span>'+
+            '<div><div class="recl" style="color:'+statusCol+'">'+recoTitle+'</div><div class="recs">'+recoSub+'</div></div></div>'+
+            '<div class="muted">'+nPass+' / '+results.length+' tests passed · suite '+suiteId+'</div></div>';
+    html += '</div>';
+
+    results.forEach(function(r){
+      var c = r.overall_pass?'#22c55e':'#ef4444';
+      var evs='';
+      r.contract_evaluations.forEach(function(e){
+        var ec = e.passed?'ok':'f';
+        evs += '<div class="ev"><span class="evic '+ec+'">'+(e.passed?'✓':'✗')+'</span>'+
+               '<div style="flex:1"><div class="evcid">'+e.contract_id+'</div><div class="evr">'+e.reasoning+'</div></div>'+
+               '<span class="evc" style="color:'+(e.passed?'#52525b':'#ef4444')+'">'+Math.round(e.confidence*100)+'%</span></div>';
+      });
+      html += '<div class="tcase" style="border-left-color:'+c+'"><div class="tchead">'+
+              '<span class="pill '+(r.overall_pass?'p':'f')+'">'+(r.overall_pass?'PASS':'FAIL')+'</span>'+
+              '<span style="font-weight:600;font-size:14px">'+r.test_name+'</span>'+
+              '<span style="margin-left:auto;font-size:10px;font-family:var(--mono);color:#52525b;text-transform:uppercase;letter-spacing:1px">'+r.severity+'</span></div>'+
+              '<div class="bub">'+(r.agent_response||'').replace(/</g,'&lt;')+'</div>'+evs+'</div>';
+    });
+
+    html += '<div style="display:flex;gap:10px;margin-top:14px;">'+
+            '<button class="btn primary" id="saveBtn">Save to dashboard</button>'+
+            '<a class="btn ghost" href="/dashboard">Open dashboard</a></div>'+
+            '<div id="saveMsg"></div>';
+    $('result').innerHTML = html;
+    $('result').classList.remove('hidden');
+    requestAnimationFrame(function(){ var rf=$('rf'); if(rf) rf.style.strokeDashoffset = off; });
+    $('saveBtn').onclick = saveRun;
+  }
+
+  async function saveRun(){
+    var b=$('saveBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span> Saving…';
+    try{
+      var r = await fetch('/api/save-run',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({suite_id:suiteId, results:results})});
+      var j = await r.json();
+      if(j.ok){ $('saveMsg').innerHTML='<div class="muted" style="margin-top:10px;color:#86efac">✓ Saved · status '+j.status+' · <a href="/dashboard" style="color:#f97316">view on dashboard →</a></div>'; b.innerHTML='Saved ✓'; }
+      else { $('saveMsg').innerHTML='<div class="err">'+(j.error||'save failed')+'</div>'; b.disabled=false; b.innerHTML='Save to dashboard'; }
+    }catch(e){ $('saveMsg').innerHTML='<div class="err">'+String(e)+'</div>'; b.disabled=false; b.innerHTML='Save to dashboard'; }
+  }
 </script>
 </body>
 </html>""")
