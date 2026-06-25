@@ -61,7 +61,7 @@ python main.py aria_customer_support http://localhost:8000/v1/chat
 
 # Run 2 — detect regressions (v2 breaks 3 contracts)
 python main.py aria_customer_support http://localhost:8000/v2/chat
-# Expected: status=FAILED, drift_score=~0.31, regressions_count=3
+# Expected: status=FAILED, drift_score=~0.82, regressions_count=3
 ```
 
 ---
@@ -74,7 +74,7 @@ agentproof/
 ├── agentproof/
 │   ├── contracts.py                 # Pydantic models
 │   ├── runner.py                    # HTTP client
-│   ├── validator.py                 # LLM-as-judge (Claude via OpenRouter)
+│   ├── validator.py                 # LLM-as-judge (OpenAI GPT-4o-mini via OpenRouter)
 │   ├── regression.py                # Drift score calculation
 │   ├── reporter.py                  # PDF report generator
 │   └── db.py                        # Neon PostgreSQL client
@@ -91,7 +91,7 @@ agentproof/
 
 ## Behavioral Contracts
 
-A behavioral contract is a typed specification of what correct agent behavior looks like, evaluated by an LLM-as-judge. Unlike `assertEqual`, contracts work on probabilistic LLM output.
+A behavioral contract is a typed specification of what correct agent behavior looks like, evaluated by an LLM-as-judge (OpenAI GPT-4o-mini via OpenRouter). Unlike `assertEqual`, contracts work on probabilistic LLM output.
 
 | Contract Type | What It Checks |
 |---|---|

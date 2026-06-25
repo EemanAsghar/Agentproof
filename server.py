@@ -449,7 +449,7 @@ Keep it conversational and do not worry too much about policies."""
 <!-- HERO -->
 <section style="padding:88px 0 72px;">
   <div class="ws">
-    <div class="badge" style="margin-bottom:24px;"><span class="bd"></span>UiPath AgentHack 2025</div>
+    <div class="badge" style="margin-bottom:24px;"><span class="bd"></span>UiPath AgentHack 2026</div>
     <h1 style="font-size:58px;font-weight:800;line-height:1.08;letter-spacing:-2.5px;margin-bottom:20px;max-width:640px;">
       The Quality Layer for<br>Enterprise AI Agents.
     </h1>
@@ -750,7 +750,7 @@ Keep it conversational and do not worry too much about policies."""
   <div class="w" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
     <div style="display:flex;align-items:center;gap:8px;">
       <img src="/logo.png" alt="AgentProof" style="width:20px;height:20px;border-radius:5px;display:block;"/>
-      <span style="font-size:13px;color:var(--t3);">AgentProof &nbsp;·&nbsp; UiPath AgentHack 2025</span>
+      <span style="font-size:13px;color:var(--t3);">AgentProof &nbsp;·&nbsp; UiPath AgentHack 2026</span>
     </div>
     <div style="display:flex;gap:20px;">
       <a href="/dashboard" style="font-size:12.5px;color:var(--t3);">Dashboard</a>
