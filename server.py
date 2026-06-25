@@ -169,6 +169,71 @@ Keep it conversational and do not worry too much about policies."""
       th, td { text-align:left; }
     """
 
+    _DASH_CSS = """
+      @keyframes cardin { to { opacity:1; transform:none; } }
+      @keyframes ringfill { to { stroke-dashoffset:var(--off); } }
+      @keyframes rise { from { transform:scaleY(.2); opacity:0; } to { transform:scaleY(1); opacity:1; } }
+      @keyframes glow { 0%,100%{opacity:1;} 50%{opacity:.5;} }
+
+      .console { max-width:1120px; margin:0 auto; padding:30px 40px 60px; }
+      .hero { display:grid; grid-template-columns:200px 1fr; gap:28px; align-items:center;
+              background:linear-gradient(180deg,var(--bg2),#0c0c0e); border:1px solid var(--br);
+              border-radius:18px; padding:30px 32px; margin-bottom:18px; }
+      @media(max-width:720px){ .hero{ grid-template-columns:1fr; text-align:center; } }
+      .ringbox { position:relative; margin:0 auto; }
+      .ringfill { stroke-dashoffset:var(--c); animation:ringfill 1.15s .25s cubic-bezier(.3,.85,.3,1) forwards; }
+      .ringnum { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+      .ringnum .rv { font-size:36px; font-weight:800; font-family:var(--mono); letter-spacing:-1px; line-height:1; }
+      .ringnum .rl { font-size:10px; color:var(--t3); text-transform:uppercase; letter-spacing:1.6px; margin-top:5px; }
+
+      .verdict { display:flex; flex-direction:column; gap:14px; }
+      .verdline { display:flex; align-items:center; gap:11px; }
+      .vstatus { font-size:24px; font-weight:800; letter-spacing:-.6px; }
+      .vdot { width:9px; height:9px; border-radius:50%; animation:glow 1.6s infinite; }
+      .vsub { font-size:14px; color:var(--t2); }
+      .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:4px; }
+      @media(max-width:720px){ .cards{ grid-template-columns:repeat(2,1fr); } }
+      .card { background:var(--bg); border:1px solid var(--br); border-radius:12px; padding:14px 16px;
+              opacity:0; transform:translateY(12px); animation:cardin .5s ease forwards; }
+      .card .ck { font-size:10px; color:var(--t3); text-transform:uppercase; letter-spacing:1.4px; margin-bottom:8px; }
+      .card .cv { font-size:24px; font-weight:800; font-family:var(--mono); letter-spacing:-.5px; }
+
+      .panel { background:var(--bg2); border:1px solid var(--br); border-radius:14px; padding:20px 22px; margin-bottom:18px; }
+      .ptitle { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:var(--t3); margin-bottom:16px; }
+      .spark { display:flex; align-items:flex-end; gap:5px; height:48px; }
+      .sb { width:11px; border-radius:3px; opacity:.9; transform-origin:bottom; animation:rise .5s ease backwards; }
+      .spark:hover .sb { opacity:.5; }
+      .spark .sb:hover { opacity:1; }
+
+      .tablewrap { border:1px solid var(--br); border-radius:14px; overflow:hidden; background:var(--bg2); }
+      .runrow { cursor:pointer; transition:background .12s; }
+      .runrow td { transition:background .12s; }
+      .runrow:hover td { background:var(--bg3); }
+      .rowdot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:9px; vertical-align:1px; }
+      .sp { box-shadow:inset 0 0 0 1px rgba(255,255,255,.04); }
+      .sp-d { background:rgba(234,179,8,.12); color:#eab308; }
+      .arrow { color:var(--t3); transition:transform .15s,color .15s; }
+      .runrow:hover .arrow { transform:translateX(3px); color:var(--or); }
+    """
+
+    _DASH_JS = """
+    <script>
+      document.querySelectorAll('[data-count]').forEach(function(el){
+        var target = parseFloat(el.getAttribute('data-count')) || 0;
+        var dec = parseInt(el.getAttribute('data-dec')||'0',10);
+        var t0 = null, dur = 900;
+        function tick(ts){
+          if(!t0) t0 = ts;
+          var p = Math.min((ts - t0)/dur, 1);
+          var e = 1 - Math.pow(1-p, 3);
+          el.textContent = (target*e).toFixed(dec);
+          if(p < 1) requestAnimationFrame(tick); else el.textContent = target.toFixed(dec);
+        }
+        requestAnimationFrame(tick);
+      });
+    </script>
+    """
+
     @app.get("/", response_class=HTMLResponse)
     async def landing():
         return HTMLResponse("""<!DOCTYPE html>
@@ -264,6 +329,32 @@ Keep it conversational and do not worry too much about policies."""
     /* CHECK/CROSS */
     .ck { color:var(--gr); font-weight:700; }
     .cx { color:var(--rd); font-weight:700; }
+
+    /* terminal cta + cursor */
+    .termcta { margin-left:auto; font-size:11px; font-weight:600; color:var(--or); font-family:var(--mono); opacity:.85; transition:opacity .15s; }
+    .termcta:hover { opacity:1; }
+    .term { box-shadow:0 24px 70px -20px rgba(0,0,0,.7); }
+    .cursor { display:inline-block; width:8px; height:15px; background:var(--or); vertical-align:-2px; margin-left:2px; animation:blink 1.05s steps(1) infinite; }
+    @keyframes blink { 50% { opacity:0; } }
+    .tline { display:block; opacity:0; transform:translateY(4px); animation:tin .26s ease forwards; }
+    @keyframes tin { to { opacity:1; transform:none; } }
+
+    /* hero badge glow */
+    .badge .bd { box-shadow:0 0 8px var(--or); animation:pulse 1.8s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.45;} }
+
+    /* scroll reveal */
+    .reveal { opacity:0; transform:translateY(20px); transition:opacity .6s cubic-bezier(.2,.6,.2,1), transform .6s cubic-bezier(.2,.6,.2,1); }
+    .reveal.in { opacity:1; transform:none; }
+
+    /* button shine on primary */
+    .btn.bo { position:relative; overflow:hidden; }
+    .btn.bo::after { content:''; position:absolute; top:0; left:-120%; width:60%; height:100%; background:linear-gradient(100deg,transparent,rgba(255,255,255,.28),transparent); transform:skewX(-18deg); transition:left .5s ease; }
+    .btn.bo:hover::after { left:140%; }
+
+    /* feature card lift */
+    .fc { transition:background .15s, transform .15s; }
+    .fc:hover { transform:translateY(-2px); }
   </style>
 </head>
 <body>
@@ -310,29 +401,14 @@ Keep it conversational and do not worry too much about policies."""
       <a href="/dashboard" class="btn bg bl">Open Dashboard</a>
     </div>
 
-    <div class="term">
+    <div class="term" id="heroTerm">
       <div class="tbar">
         <span class="td r"></span><span class="td y"></span><span class="td g"></span>
         <span class="tt">agentproof — validation run</span>
+        <a href="/live" class="termcta">▶ run the full demo</a>
       </div>
       <div class="tb">
-<pre style="white-space:pre;"><span class="tc">$</span> <span class="tw">agentproof validate</span> <span class="t2c">--suite shopease_refunds --target /v2/chat</span>
-
-  <span class="t2c">Loading   </span> <span class="tw">shopease_refunds</span><span class="t2c"> · 4 tests · 3 contracts each</span>
-  <span class="t2c">Baseline  </span> <span class="tw">run_a3f9b2c1</span><span class="t2c"> · 4/4 passed</span>
-
-  <span class="t2c">Running validation...</span>
-
-  <span class="tg">✓</span>  <span class="tw">refund_eligibility_confirmed </span>   <span class="tg">PASS</span>  <span class="t2c">97%  CRITICAL</span>
-  <span class="tr">✗</span>  <span class="tw">policy_citation_required     </span>   <span class="tr">FAIL</span>  <span class="t2c">91%  CRITICAL</span>  <span class="ty">← regression</span>
-  <span class="tr">✗</span>  <span class="tw">no_support_redirect          </span>   <span class="tr">FAIL</span>  <span class="t2c">87%  CRITICAL</span>  <span class="ty">← regression</span>
-  <span class="tg">✓</span>  <span class="tw">response_length_limit        </span>   <span class="tg">PASS</span>  <span class="t2c">94%  HIGH</span>
-
-  <span class="t2c">─────────────────────────────────────</span>
-  <span class="t2c">Drift Score  </span><span class="tr">75.0%   Status: FAILED</span>
-  <span class="t2c">Regressions  </span><span class="tr">2 critical</span>
-
-  <span class="tr">⊘</span> <span class="tw">Deployment blocked.</span> <span class="t2c">Human approval required.</span></pre>
+        <pre id="termOut" style="white-space:pre;margin:0;min-height:300px;"></pre>
       </div>
     </div>
   </div>
@@ -620,6 +696,56 @@ Keep it conversational and do not worry too much about policies."""
     </div>
   </div>
 </footer>
+
+<script>
+  // ---- animated hero terminal (loops) ----
+  var L = [
+    '<span class="tc">$</span> <span class="tw">agentproof validate</span> <span class="t2c">--suite shopease_refunds --target /v2/chat</span>',
+    '',
+    '  <span class="t2c">loading  </span> <span class="tw">shopease_refunds</span><span class="t2c"> · 4 contracts</span>',
+    '  <span class="t2c">baseline </span> <span class="tw">run_a3f9b2c1</span><span class="t2c"> · 4/4 passed</span>',
+    '',
+    '  <span class="t2c">running validation…</span>',
+    '',
+    '  <span class="tg">✓</span>  <span class="tw">response_length_limit</span>          <span class="tg">PASS</span>  <span class="t2c">95%  HIGH</span>',
+    '  <span class="tr">✗</span>  <span class="tw">refund_eligibility_confirmed</span>   <span class="tr">FAIL</span>  <span class="t2c">88%  CRITICAL</span>  <span class="ty">← regression</span>',
+    '  <span class="tr">✗</span>  <span class="tw">policy_citation_required</span>       <span class="tr">FAIL</span>  <span class="t2c">91%  CRITICAL</span>  <span class="ty">← regression</span>',
+    '  <span class="tr">✗</span>  <span class="tw">no_support_redirect</span>            <span class="tr">FAIL</span>  <span class="t2c">87%  CRITICAL</span>  <span class="ty">← regression</span>',
+    '',
+    '  <span class="t2c">────────────────────────────────────────</span>',
+    '  <span class="t2c">drift  </span><span class="tr">75%</span>   <span class="t2c">status  </span><span class="tr">FAILED</span>   <span class="t2c">regressions  </span><span class="tr">3 critical</span>',
+    '',
+    '  <span class="tr">⊘</span> <span class="tw">Deployment blocked.</span> <span class="t2c">Customers never saw the regression.</span>'
+  ];
+  var out = document.getElementById('termOut');
+  function typeTerm(){
+    if(!out) return;
+    out.innerHTML=''; var i=0;
+    function step(){
+      if(i>=L.length){
+        var cur=document.createElement('span'); cur.className='cursor'; out.appendChild(cur);
+        setTimeout(typeTerm, 4200); return;
+      }
+      var ln=document.createElement('span'); ln.className='tline';
+      ln.innerHTML = L[i]===''? '&nbsp;' : L[i];
+      out.appendChild(ln);
+      i++;
+      var d = (i>=8&&i<=11)? 230 : (i>=13)? 360 : 150;  // linger on the failing rows + verdict
+      setTimeout(step, d);
+    }
+    step();
+  }
+  // start when hero is on screen
+  var term = document.getElementById('heroTerm');
+  if(term){
+    var io = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting){ typeTerm(); io.disconnect(); } }); }, {threshold:.3});
+    io.observe(term);
+  }
+
+  // ---- scroll reveal for below-the-fold sections (hero excluded) ----
+  var ro = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); ro.unobserve(e.target); } }); }, {threshold:.12});
+  document.querySelectorAll('section:not(:first-of-type) .ws, section:not(:first-of-type) .w').forEach(function(b){ b.classList.add('reveal'); ro.observe(b); });
+</script>
 
 </body>
 </html>""")
@@ -1195,15 +1321,62 @@ Keep it conversational and do not worry too much about policies."""
             runs = []
             error = str(e)
 
+        import math
         total = len(runs)
         passed = sum(1 for r in runs if r["overall_status"] == "PASSED")
         failed = sum(1 for r in runs if r["overall_status"] == "FAILED")
         pass_rate = round(passed / total * 100) if total else 0
 
+        def _d(r):
+            return r["drift_score"] or 0
+
+        latest = runs[0] if runs else None
+        latest_drift = round(_d(latest) * 100, 1) if latest else 0.0
+        latest_status = latest["overall_status"] if latest else "NONE"
+        latest_color = _status_color(latest_status)
+        avg_drift = round(sum(_d(r) for r in runs) / total * 100, 1) if total else 0.0
+
+        latest_verdict = {
+            "PASSED": "All contracts satisfied — safe to deploy.",
+            "DEGRADED": "Behavioral drift detected — review before deploy.",
+            "FAILED": "Critical regressions — deployment would be blocked.",
+            "NONE": "No validation runs yet. Trigger one from UiPath.",
+        }.get(latest_status, "")
+
+        # animated drift ring for the latest run
+        _rs, _sw = 150, 12
+        _r = _rs / 2 - _sw
+        _circ = 2 * math.pi * _r
+        _off = _circ * (1 - min(latest_drift, 100) / 100)
+        ring = (
+            f'<div class="ringbox" style="width:{_rs}px;height:{_rs}px;">'
+            f'<svg width="{_rs}" height="{_rs}" style="transform:rotate(-90deg);">'
+            f'<circle cx="{_rs/2}" cy="{_rs/2}" r="{_r}" fill="none" stroke="#1f1f23" stroke-width="{_sw}"/>'
+            f'<circle class="ringfill" cx="{_rs/2}" cy="{_rs/2}" r="{_r}" fill="none" stroke="{latest_color}" '
+            f'stroke-width="{_sw}" stroke-linecap="round" stroke-dasharray="{_circ:.2f}" '
+            f'style="--c:{_circ:.2f};--off:{_off:.2f};"/>'
+            f'</svg>'
+            f'<div class="ringnum"><div class="rv" style="color:{latest_color};">{latest_drift}%</div><div class="rl">drift</div></div>'
+            f'</div>'
+        )
+
+        # run-history sparkline (oldest -> newest)
+        spark = ""
+        for idx, r in enumerate(reversed(runs[:26])):
+            c = _status_color(r["overall_status"])
+            h = 12 + round(min(_d(r), 1.0) * 34)
+            spark += (
+                f'<span class="sb" title="{r["overall_status"]} · {round(_d(r)*100)}%" '
+                f'style="height:{h}px;background:{c};animation-delay:{idx*0.025:.2f}s;"></span>'
+            )
+        if not spark:
+            spark = '<span style="color:var(--t3);font-size:12px;font-family:var(--mono);">awaiting first run…</span>'
+
         rows = ""
         for r in runs:
             status = r["overall_status"]
             pill = {"PASSED": "sp-p", "DEGRADED": "sp-d", "FAILED": "sp-f"}.get(status, "")
+            sc = _status_color(status)
             drift = r["drift_score"] or 0
             regressions = r["regressions"]
             if isinstance(regressions, str):
@@ -1212,26 +1385,27 @@ Keep it conversational and do not worry too much about policies."""
             ts = str(r["timestamp"])[:19].replace("T", " ")
             reg_color = "#ef4444" if reg_count > 0 else "#22c55e"
             rows += (
-                f'<tr onclick="window.location=\'/run/{r["id"]}\'" style="cursor:pointer;">'
-                f'<td style="padding:11px 16px;color:#52525b;font-family:monospace;font-size:12px;">{ts}</td>'
-                f'<td style="padding:11px 16px;font-weight:500;font-family:monospace;font-size:13px;">{r["suite_id"]}</td>'
-                f'<td style="padding:11px 16px;"><span class="sp {pill}">{status}</span></td>'
-                f'<td style="padding:11px 16px;">{_drift_bar(drift)}</td>'
-                f'<td style="padding:11px 16px;color:{reg_color};font-weight:600;font-size:13px;font-family:monospace;">{reg_count}</td>'
-                f'<td style="padding:11px 16px;color:#52525b;font-size:12px;font-family:monospace;">{str(r["id"])[:8]}…</td>'
+                f'<tr class="runrow" onclick="window.location=\'/run/{r["id"]}\'">'
+                f'<td style="padding:13px 18px;color:#a1a1aa;font-family:monospace;font-size:12px;"><span class="rowdot" style="background:{sc};"></span>{ts}</td>'
+                f'<td style="padding:13px 18px;font-weight:500;font-family:monospace;font-size:13px;">{r["suite_id"]}</td>'
+                f'<td style="padding:13px 18px;"><span class="sp {pill}">{status}</span></td>'
+                f'<td style="padding:13px 18px;">{_drift_bar(drift)}</td>'
+                f'<td style="padding:13px 18px;color:{reg_color};font-weight:600;font-size:13px;font-family:monospace;">{reg_count}</td>'
+                f'<td style="padding:13px 18px;color:#52525b;font-size:12px;font-family:monospace;">{str(r["id"])[:8]}… <span class="arrow">→</span></td>'
                 f'</tr>'
             )
 
         error_html = (
             f'<div style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);'
-            f'color:#ef4444;padding:12px 16px;border-radius:6px;margin-bottom:20px;'
+            f'color:#ef4444;padding:12px 16px;border-radius:10px;margin-bottom:18px;'
             f'font-family:monospace;font-size:13px;">DB Error: {error}</div>'
         ) if error else ""
 
         empty_row = (
-            '<tr><td colspan="6" style="padding:40px;text-align:center;color:#52525b;font-size:13px;">'
+            '<tr><td colspan="6" style="padding:48px;text-align:center;color:#52525b;font-size:13px;">'
             'No runs yet &nbsp;·&nbsp; '
-            'Trigger from UiPath: <code style="color:#a1a1aa;">uipath run main.py \'{"suite_id":"shopease_refunds","agent_endpoint":"https://agentproof.vercel.app/v1/chat"}\'</code>'
+            '<a href="/live" style="color:#f97316;font-weight:600;">▶ run the live demo</a>'
+            ' &nbsp;or trigger from UiPath: <code style="color:#a1a1aa;">uipath run main.py \'{"suite_id":"shopease_refunds",…}\'</code>'
             '</td></tr>'
         )
 
@@ -1241,44 +1415,68 @@ Keep it conversational and do not worry too much about policies."""
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Dashboard — AgentProof</title>
-  <style>{_DARK_CSS}</style>
+  <style>{_DARK_CSS}{_DASH_CSS}</style>
 </head>
 <body>
-<header style="background:var(--bg);border-bottom:1px solid var(--br);padding:0 40px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:99;backdrop-filter:blur(12px);">
+<header style="background:rgba(9,9,11,.78);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);padding:0 40px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:99;">
   <div style="display:flex;align-items:center;gap:12px;">
-    <a href="/" style="font-size:12.5px;color:var(--t3);padding:5px 10px;border:1px solid var(--br2);border-radius:5px;">← Home</a>
+    <a href="/" style="font-size:12.5px;color:var(--t3);padding:5px 11px;border:1px solid var(--br2);border-radius:6px;">← Home</a>
     <div style="display:flex;align-items:center;gap:8px;">
       <span class="lm">AP</span>
       <span style="font-weight:700;font-size:15px;">AgentProof</span>
-      <span style="font-size:13px;color:var(--t3);margin-left:2px;">/ Dashboard</span>
+      <span style="font-size:13px;color:var(--t3);margin-left:2px;">/ Console</span>
     </div>
   </div>
-  <div style="display:flex;gap:28px;">
-    <div style="text-align:right;"><div style="font-size:18px;font-weight:700;color:var(--or);font-family:monospace;">{total}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Runs</div></div>
-    <div style="text-align:right;"><div style="font-size:18px;font-weight:700;color:#22c55e;font-family:monospace;">{passed}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Passed</div></div>
-    <div style="text-align:right;"><div style="font-size:18px;font-weight:700;color:#ef4444;font-family:monospace;">{failed}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Failed</div></div>
-    <div style="text-align:right;"><div style="font-size:18px;font-weight:700;font-family:monospace;">{pass_rate}%</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Pass Rate</div></div>
-  </div>
+  <a href="/live" style="font-size:12.5px;font-weight:600;color:#f97316;padding:6px 13px;border:1px solid rgba(249,115,22,.3);border-radius:6px;">▶ Live demo</a>
 </header>
-<main style="padding:32px 40px;max-width:1100px;">
+
+<div class="console">
   {error_html}
-  <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);margin-bottom:14px;">Recent Validation Runs</div>
-  <div style="border:1px solid var(--br);border-radius:9px;overflow:hidden;background:var(--bg2);">
+
+  <!-- HERO: latest run health -->
+  <div class="hero">
+    {ring}
+    <div class="verdict">
+      <div class="verdline">
+        <span class="vdot" style="background:{latest_color};box-shadow:0 0 12px {latest_color};"></span>
+        <span class="vstatus" style="color:{latest_color};">{latest_status}</span>
+        <span style="font-size:11px;color:var(--t3);font-family:var(--mono);margin-left:4px;text-transform:uppercase;letter-spacing:1px;">latest run</span>
+      </div>
+      <div class="vsub">{latest_verdict}</div>
+      <div class="cards">
+        <div class="card" style="animation-delay:.05s;"><div class="ck">Total runs</div><div class="cv" data-count="{total}">0</div></div>
+        <div class="card" style="animation-delay:.12s;"><div class="ck">Pass rate</div><div class="cv" style="color:#22c55e;"><span data-count="{pass_rate}">0</span>%</div></div>
+        <div class="card" style="animation-delay:.19s;"><div class="ck">Failed</div><div class="cv" style="color:#ef4444;" data-count="{failed}">0</div></div>
+        <div class="card" style="animation-delay:.26s;"><div class="ck">Avg drift</div><div class="cv" style="color:#eab308;"><span data-count="{avg_drift}" data-dec="1">0</span>%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RUN HISTORY SPARKLINE -->
+  <div class="panel">
+    <div class="ptitle">Drift history · last {min(total,26)} runs</div>
+    <div class="spark">{spark}</div>
+  </div>
+
+  <!-- RUNS TABLE -->
+  <div class="ptitle">Recent validation runs</div>
+  <div class="tablewrap">
     <table>
       <thead>
         <tr style="border-bottom:1px solid var(--br);">
-          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Timestamp</th>
-          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Suite</th>
-          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Status</th>
-          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Drift Score</th>
-          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Regressions</th>
-          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Run ID</th>
+          <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Timestamp</th>
+          <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Suite</th>
+          <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Status</th>
+          <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Drift</th>
+          <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Regressions</th>
+          <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Run ID</th>
         </tr>
       </thead>
       <tbody>{rows if rows else empty_row}</tbody>
     </table>
   </div>
-</main>
+</div>
+{_DASH_JS}
 </body>
 </html>""")
 
