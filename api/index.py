@@ -1,18 +1,22 @@
 import sys
 import os
+import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, JSONResponse
+
+app = FastAPI(title="AgentProof")
+
+_STARTUP_ERROR = None
 
 try:
     from dotenv import load_dotenv
     load_dotenv()
 
-    from fastapi import FastAPI, Request
-    from fastapi.responses import HTMLResponse, JSONResponse
     from pydantic import BaseModel
     from openai import OpenAI
-
-    app = FastAPI(title="AgentProof")
 
     def _get_client() -> OpenAI:
         return OpenAI(
@@ -208,13 +212,7 @@ Keep it conversational and do not worry too much about policies."""
 </main></body></html>""")
 
 except Exception as _startup_error:
-    import traceback
     _tb = traceback.format_exc()
-
-    from fastapi import FastAPI
-    from fastapi.responses import JSONResponse
-
-    app = FastAPI()
 
     @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
     async def startup_error(path: str = ""):
