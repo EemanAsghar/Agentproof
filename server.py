@@ -320,6 +320,47 @@ Keep it conversational and do not worry too much about policies."""
     class UiPathConnectReq(BaseModel):
         base_url: str
         token: str
+        folder_id: str | None = None
+
+    def _parse_folders(body):
+        items = None
+        if isinstance(body, list):
+            items = body
+        elif isinstance(body, dict):
+            items = body.get("value") or body.get("PageItems") or body.get("items") or body.get("Dtos")
+        out = []
+        for f in (items or []):
+            if not isinstance(f, dict):
+                continue
+            fid = f.get("Id") or f.get("id") or f.get("Key")
+            fname = (f.get("FullyQualifiedName") or f.get("DisplayName")
+                     or f.get("Name") or f.get("fullyQualifiedName"))
+            if fid is not None:
+                out.append({"id": fid, "name": fname or str(fid)})
+        return out
+
+    async def _list_releases(client, base, H, folder):
+        rr = await client.get(
+            base + "/orchestrator_/odata/Releases?$select=Name,Key,ProcessKey,ProcessVersion&$top=200",
+            headers={**H, "X-UIPATH-OrganizationUnitId": str(folder["id"])},
+        )
+        if rr.status_code >= 400:
+            return [], rr.status_code
+        try:
+            rels = rr.json().get("value", [])
+        except Exception:
+            return [], rr.status_code
+        agents = []
+        for rel in rels:
+            agents.append({
+                "name": rel.get("Name") or rel.get("ProcessKey"),
+                "key": rel.get("Key") or rel.get("ProcessKey"),
+                "process_key": rel.get("ProcessKey"),
+                "version": rel.get("ProcessVersion"),
+                "folder": folder["name"],
+                "folder_id": folder["id"],
+            })
+        return agents, rr.status_code
 
     @app.post("/api/uipath/agents")
     async def uipath_agents(req: UiPathConnectReq):
@@ -331,65 +372,55 @@ Keep it conversational and do not worry too much about policies."""
             token = token[7:]
         H = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         try:
-            async with httpx.AsyncClient(timeout=25.0) as client:
-                # 1) discover folders the user can see
-                folders = []
+            async with httpx.AsyncClient(timeout=25.0, follow_redirects=True) as client:
+                # 1) try several folder-listing endpoints (don't bail on the first 403)
+                folders, saw_401, saw_403 = [], False, False
                 for fpath in (
+                    "/orchestrator_/odata/Folders?$select=Id,FullyQualifiedName,DisplayName&$top=200",
                     "/orchestrator_/api/FoldersNavigation/GetAllFoldersForCurrentUser",
-                    "/orchestrator_/odata/Folders",
+                    "/orchestrator_/api/FoldersNavigation/GetFoldersForCurrentUser?skip=0&take=200",
                 ):
                     fr = await client.get(base + fpath, headers=H)
                     if fr.status_code == 401:
-                        return {"ok": False, "error": "Token expired or invalid (401). Paste a fresh token from your UiPath session."}
+                        saw_401 = True; continue
                     if fr.status_code == 403:
-                        return {"ok": False, "error": "Token lacks permission to list folders (403)."}
+                        saw_403 = True; continue
                     if fr.status_code >= 400:
                         continue
                     try:
-                        body = fr.json()
+                        folders = _parse_folders(fr.json())
                     except Exception:
-                        continue
-                    items = body.get("value") if isinstance(body, dict) else body
-                    if items is None and isinstance(body, dict):
-                        items = body.get("PageItems") or body.get("items")
-                    if items:
-                        for f in items:
-                            fid = f.get("Id") or f.get("id") or f.get("Key")
-                            fname = (f.get("FullyQualifiedName") or f.get("DisplayName")
-                                     or f.get("Name") or f.get("fullyQualifiedName"))
-                            if fid is not None:
-                                folders.append({"id": fid, "name": fname or str(fid)})
+                        folders = []
+                    if folders:
                         break
-                if not folders:
-                    return {"ok": False, "error": "Connected, but could not enumerate folders for this token."}
 
-                # 2) list releases (published processes/agents) per folder
-                agents, seen = [], set()
-                for f in folders[:12]:
-                    rr = await client.get(
-                        base + "/orchestrator_/odata/Releases?$select=Name,Key,ProcessKey,ProcessVersion",
-                        headers={**H, "X-UIPATH-OrganizationUnitId": str(f["id"])},
-                    )
-                    if rr.status_code >= 400:
-                        continue
-                    try:
-                        rels = rr.json().get("value", [])
-                    except Exception:
-                        rels = []
-                    for rel in rels:
-                        key = rel.get("Key") or rel.get("ProcessKey")
-                        if key in seen:
+                # 2) manual folder-id escape hatch
+                if not folders and req.folder_id:
+                    folders = [{"id": req.folder_id.strip(), "name": f"folder {req.folder_id.strip()}"}]
+
+                if saw_401 and not folders:
+                    return {"ok": False, "error": "Token expired or invalid (401). Paste a fresh token from your UiPath session."}
+
+                # 3) list releases per folder
+                agents, seen, rel_status = [], set(), None
+                for f in folders[:15]:
+                    found, rel_status = await _list_releases(client, base, H, f)
+                    for a in found:
+                        if a["key"] in seen:
                             continue
-                        seen.add(key)
-                        agents.append({
-                            "name": rel.get("Name") or rel.get("ProcessKey"),
-                            "key": key,
-                            "process_key": rel.get("ProcessKey"),
-                            "version": rel.get("ProcessVersion"),
-                            "folder": f["name"],
-                            "folder_id": f["id"],
-                        })
-                return {"ok": True, "agents": agents, "folders": len(folders)}
+                        seen.add(a["key"]); agents.append(a)
+
+                if agents:
+                    return {"ok": True, "agents": agents, "folders": len(folders)}
+
+                # 4) helpful diagnostics when nothing came back
+                if not folders:
+                    if saw_403:
+                        return {"ok": False, "error": "Token authenticated, but it can't list folders (403). Either add the OR.Folders.Read + OR.Execution.Read scopes to your PAT, or paste a Folder ID below (e.g. 3147226)."}
+                    return {"ok": False, "error": "Connected, but no folders were returned for this token. Try the browser token, or enter a Folder ID below."}
+                if rel_status in (401, 403):
+                    return {"ok": False, "error": f"Found {len(folders)} folder(s), but the token can't list published agents ({rel_status}). Add the OR.Execution.Read scope to your PAT."}
+                return {"ok": False, "error": f"Connected to {len(folders)} folder(s), but no published agents (Releases) were found."}
         except Exception as e:
             return {"ok": False, "error": f"Could not reach Orchestrator: {e}"}
 
@@ -1766,7 +1797,11 @@ Keep it conversational and do not worry too much about policies."""
       <input id="uipToken" class="mono" type="password" placeholder="paste a token from your UiPath session"/>
       <div class="muted" style="margin-top:6px;">Used server-side to call Orchestrator. Never stored. UiPath tokens expire ~1h — paste a fresh one.</div>
     </div>
-    <button class="btn primary" id="connectBtn">🔌 Connect &amp; discover agents</button>
+    <div class="adv" id="uipAdvToggle">⚙ Advanced (folder ID — only if folder discovery is blocked)</div>
+    <div class="advbox" id="uipAdvBox">
+      <div><label>Folder ID (optional)</label><input id="uipFolder" class="mono" placeholder="e.g. 3147226"/></div>
+    </div>
+    <button class="btn primary" id="connectBtn" style="margin-top:6px;">🔌 Connect &amp; discover agents</button>
     <div id="uipConnErr"></div>
 
     <div id="uipPicker" class="hidden" style="margin-top:20px;border-top:1px solid var(--br);padding-top:18px;">
@@ -1811,6 +1846,7 @@ Keep it conversational and do not worry too much about policies."""
   var suite = null, suiteId = null, results = [];
 
   $('advToggle').onclick = function(){ $('advBox').classList.toggle('on'); };
+  $('uipAdvToggle').onclick = function(){ $('uipAdvBox').classList.toggle('on'); };
   $('demoLink').onclick = function(){
     $('endpoint').value = window.location.origin + '/v2/chat';
     $('field').value = 'message';
@@ -1849,11 +1885,12 @@ Keep it conversational and do not worry too much about policies."""
   $('connectBtn').onclick = async function(){
     clearErr('uipConnErr');
     var url = $('uipUrl').value.trim(), token = $('uipToken').value.trim();
+    var folderId = $('uipFolder').value.trim() || null;
     if(!url || !token){ err('uipConnErr','Enter your Orchestrator URL and a token.'); return; }
     var b=$('connectBtn'); var old=b.innerHTML; b.disabled=true; b.innerHTML='<span class="spin"></span> Connecting…';
     try{
       var r = await fetch('/api/uipath/agents',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({base_url:url, token:token})});
+        body:JSON.stringify({base_url:url, token:token, folder_id:folderId})});
       var j = await r.json();
       if(!j.ok){ err('uipConnErr', j.error||'Could not connect.'); return; }
       var agents = j.agents||[];
