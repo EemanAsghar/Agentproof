@@ -65,12 +65,40 @@ Keep it conversational and do not worry too much about policies."""
         return {"status": "ok"}
 
     def _status_color(status: str) -> str:
-        return {"PASSED": "#10B981", "DEGRADED": "#F59E0B", "FAILED": "#F43F5E"}.get(status, "#94A3B8")
+        return {"PASSED": "#22c55e", "DEGRADED": "#eab308", "FAILED": "#ef4444"}.get(status, "#71717a")
 
     def _drift_bar(score: float) -> str:
         pct = round(score * 100, 1)
         color = _status_color("PASSED" if pct < 5 else "DEGRADED" if pct < 15 else "FAILED")
-        return f"""<div style="background:#1E293B;border-radius:4px;height:8px;width:100%;margin-bottom:4px;"><div style="background:{color};border-radius:4px;height:8px;width:{min(pct,100)}%;"></div></div><span style="color:{color};font-size:12px;font-weight:600;">{pct}%</span>"""
+        fill = min(pct, 100)
+        return (
+            f'<div style="background:#27272a;border-radius:2px;height:4px;width:120px;margin-bottom:5px;">'
+            f'<div style="background:{color};border-radius:2px;height:4px;width:{fill}%;"></div></div>'
+            f'<span style="color:{color};font-size:12px;font-weight:600;font-family:monospace;">{pct}%</span>'
+        )
+
+    # Shared CSS for dark pages (injected as a variable, so no f-string escaping needed)
+    _DARK_CSS = """
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --bg:#09090b; --bg2:#111113; --bg3:#18181b;
+        --br:#1f1f23; --br2:#2e2e32;
+        --t1:#fafafa; --t2:#a1a1aa; --t3:#52525b;
+        --or:#f97316; --orbg:rgba(249,115,22,.10); --orbd:rgba(249,115,22,.22);
+        --gr:#22c55e; --rd:#ef4444; --yl:#eab308;
+        --mono:'SF Mono','Fira Code','Cascadia Code',ui-monospace,monospace;
+      }
+      body { background:var(--bg); color:var(--t1); font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif; font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+      a { text-decoration:none; color:inherit; }
+      .lm { background:var(--or); color:#fff; border-radius:5px; padding:3px 8px; font-weight:800; font-size:12.5px; }
+      .sp { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11.5px; font-weight:600; font-family:var(--mono); }
+      .sp-p { background:rgba(34,197,94,.12); color:#22c55e; }
+      .sp-f { background:rgba(239,68,68,.12); color:#ef4444; }
+      .sp-d { background:rgba(234,179,8,.12); color:#eab308; }
+      tbody tr:hover td { background:var(--bg2); }
+      table { width:100%; border-collapse:collapse; }
+      th, td { text-align:left; }
+    """
 
     @app.get("/", response_class=HTMLResponse)
     async def landing():
@@ -79,228 +107,370 @@ Keep it conversational and do not worry too much about policies."""
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>AgentProof — Behavioral Testing for AI Agents</title>
+  <title>AgentProof — Continuous Quality for Enterprise AI Agents</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
     :root {
-      --orange: #f97316;
-      --orange-light: #fff7ed;
-      --orange-border: #fed7aa;
-      --green: #16a34a;
-      --red: #dc2626;
-      --ink: #111110;
-      --ink-2: #3d3d3a;
-      --ink-3: #6b6b66;
-      --ink-4: #a3a39e;
-      --bg: #ffffff;
-      --bg-2: #f7f7f5;
-      --bg-dark: #111110;
-      --border: #e8e8e4;
-      --radius: 8px;
-      --radius-sm: 5px;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
-      --shadow: 0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.05);
+      --bg:#09090b; --bg2:#111113; --bg3:#18181b;
+      --br:#1f1f23; --br2:#2e2e32;
+      --t1:#fafafa; --t2:#a1a1aa; --t3:#52525b;
+      --or:#f97316; --orbg:rgba(249,115,22,.10); --orbd:rgba(249,115,22,.22);
+      --gr:#22c55e; --rd:#ef4444; --yl:#eab308;
+      --mono:'SF Mono','Fira Code','Cascadia Code',ui-monospace,monospace;
     }
+    html { scroll-behavior:smooth; }
+    body { background:var(--bg); color:var(--t1); font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif; font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+    a { text-decoration:none; color:inherit; }
+    .w  { max-width:1060px; margin:0 auto; padding:0 48px; }
+    .ws { max-width:800px;  margin:0 auto; padding:0 48px; }
 
-    body {
-      background: var(--bg);
-      color: var(--ink);
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-      font-size: 16px;
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-    }
-    a { text-decoration: none; color: inherit; }
+    /* NAV */
+    nav { position:sticky; top:0; z-index:99; background:rgba(9,9,11,.88); backdrop-filter:blur(14px); border-bottom:1px solid var(--br); }
+    .ni { height:58px; display:flex; align-items:center; justify-content:space-between; }
+    .nl { display:flex; align-items:center; gap:28px; }
+    .logo { display:flex; align-items:center; gap:8px; }
+    .lm { background:var(--or); color:#fff; border-radius:5px; padding:3px 8px; font-weight:800; font-size:12.5px; }
+    .ln { font-weight:700; font-size:15px; }
+    .nlinks { display:flex; gap:2px; }
+    .nlinks a { font-size:13.5px; color:var(--t2); padding:5px 10px; border-radius:5px; transition:color .12s,background .12s; }
+    .nlinks a:hover { color:var(--t1); background:var(--bg3); }
+    .nr { display:flex; align-items:center; gap:8px; }
 
-    .container { max-width: 1000px; margin: 0 auto; padding: 0 48px; }
-    .container-narrow { max-width: 760px; margin: 0 auto; padding: 0 48px; }
+    /* BUTTONS */
+    .btn { display:inline-flex; align-items:center; gap:5px; padding:8px 16px; border-radius:6px; font-size:13.5px; font-weight:600; transition:all .12s; }
+    .bg { color:var(--t2); border:1px solid var(--br2); }
+    .bg:hover { color:var(--t1); background:var(--bg3); border-color:var(--t3); }
+    .bo { background:var(--or); color:#fff; }
+    .bo:hover { background:#ea6c00; }
+    .bl { padding:11px 26px; font-size:15px; border-radius:7px; }
 
-    /* Nav */
-    header { background: rgba(255,255,255,0.94); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
-    .nav { height: 64px; display: flex; align-items: center; justify-content: space-between; }
-    .nav-logo { display: flex; align-items: center; gap: 10px; }
-    .nav-badge { background: var(--orange); color: #fff; border-radius: var(--radius-sm); padding: 3px 9px; font-weight: 800; font-size: 13px; letter-spacing: -0.2px; }
-    .nav-name { font-weight: 700; font-size: 15px; color: var(--ink); }
-    .nav-links { display: flex; align-items: center; gap: 2px; }
-    .nav-link { font-size: 14px; color: var(--ink-3); padding: 6px 12px; border-radius: 6px; transition: background .15s, color .15s; }
-    .nav-link:hover { background: var(--bg-2); color: var(--ink); }
-    .nav-actions { display: flex; align-items: center; gap: 8px; }
+    /* HR */
+    .hr { height:1px; background:var(--br); }
 
-    /* Buttons */
-    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap; }
-    .btn-primary { background: var(--ink); color: #fff; box-shadow: var(--shadow-sm); }
-    .btn-primary:hover { background: #2a2a27; box-shadow: var(--shadow); }
-    .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
-    .btn-secondary:hover { border-color: #c8c8c2; background: var(--bg-2); }
-    .btn-orange { background: var(--orange); color: #fff; box-shadow: var(--shadow-sm); }
-    .btn-orange:hover { background: #ea6c00; box-shadow: var(--shadow); }
-    .btn-lg { padding: 13px 28px; font-size: 15px; border-radius: 9px; }
+    /* BADGE */
+    .badge { display:inline-flex; align-items:center; gap:6px; background:var(--orbg); color:var(--or); border:1px solid var(--orbd); border-radius:20px; padding:3px 12px; font-size:11.5px; font-weight:600; }
+    .bd { width:5px; height:5px; background:var(--or); border-radius:50%; display:inline-block; }
 
-    /* Badge */
-    .badge { display: inline-flex; align-items: center; gap: 6px; background: var(--orange-light); color: #c2410c; border: 1px solid var(--orange-border); border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; }
+    /* LABEL */
+    .lbl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:var(--t3); }
 
-    /* Divider */
-    .divider { height: 1px; background: var(--border); }
+    /* TERMINAL */
+    .term { background:var(--bg2); border:1px solid var(--br); border-radius:10px; overflow:hidden; font-family:var(--mono); font-size:12.5px; line-height:1.65; }
+    .tbar { background:var(--bg3); border-bottom:1px solid var(--br); padding:9px 14px; display:flex; align-items:center; gap:6px; }
+    .td { width:11px; height:11px; border-radius:50%; opacity:.8; }
+    .td.r { background:#ef4444; }
+    .td.y { background:#eab308; }
+    .td.g { background:#22c55e; }
+    .tt { margin-left:8px; font-size:11px; color:var(--t3); }
+    .tb { padding:18px 20px; overflow-x:auto; }
+    .tc { color:var(--t3); }
+    .tg { color:var(--gr); }
+    .tr { color:var(--rd); }
+    .to { color:var(--or); }
+    .tw { color:var(--t1); }
+    .ty { color:var(--yl); }
+    .t2c { color:var(--t2); }
 
-    /* Check/cross */
-    .pass { color: var(--green); font-weight: 700; }
-    .fail { color: var(--red); font-weight: 700; }
+    /* TIMELINE */
+    .tl { display:flex; flex-direction:column; }
+    .tls { display:flex; gap:16px; }
+    .tll { display:flex; flex-direction:column; align-items:center; flex-shrink:0; }
+    .tln { width:26px; height:26px; border-radius:50%; background:var(--bg3); border:1px solid var(--br2); display:flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:700; color:var(--t3); font-family:var(--mono); flex-shrink:0; }
+    .tln.hi { background:var(--orbg); border-color:var(--orbd); color:var(--or); }
+    .tlc { width:1px; flex:1; min-height:20px; background:var(--br); }
+    .tlr { padding:2px 0 28px; }
+    .tlt { font-size:14.5px; font-weight:600; margin-bottom:3px; }
+    .tld { font-size:13.5px; color:var(--t2); line-height:1.55; max-width:500px; }
 
-    /* Step number */
-    .step-num { flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%; background: var(--orange-light); border: 2px solid var(--orange-border); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: var(--orange); }
+    /* FEATURE GRID */
+    .fg { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--br); border:1px solid var(--br); border-radius:10px; overflow:hidden; }
+    .fc { background:var(--bg); padding:26px 24px; transition:background .12s; }
+    .fc:hover { background:var(--bg2); }
+
+    /* STATUS PILLS */
+    .sp { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11.5px; font-weight:600; font-family:var(--mono); }
+    .sp-p { background:rgba(34,197,94,.12); color:#22c55e; }
+    .sp-f { background:rgba(239,68,68,.12); color:#ef4444; }
+
+    /* CHECK/CROSS */
+    .ck { color:var(--gr); font-weight:700; }
+    .cx { color:var(--rd); font-weight:700; }
   </style>
 </head>
 <body>
 
-<!-- NAV -->
-<header>
-  <div class="container nav">
-    <div class="nav-logo">
-      <span class="nav-badge">AP</span>
-      <span class="nav-name">AgentProof</span>
-      <div class="nav-links" style="margin-left:16px;">
-        <a href="#how-it-works" class="nav-link">How it works</a>
-        <a href="#demo" class="nav-link">Demo</a>
-        <a href="/dashboard" class="nav-link">Dashboard</a>
+<nav>
+  <div class="w ni">
+    <div class="nl">
+      <div class="logo">
+        <span class="lm">AP</span>
+        <span class="ln">AgentProof</span>
+      </div>
+      <div class="nlinks">
+        <a href="#lifecycle">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#demo">Demo</a>
+        <a href="/dashboard">Dashboard</a>
       </div>
     </div>
-    <div class="nav-actions">
-      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" class="btn btn-secondary" style="font-weight:500;">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="opacity:.7"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+    <div class="nr">
+      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" class="btn bg">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:.7"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
         GitHub
       </a>
+      <a href="/dashboard" class="btn bo">Open Dashboard</a>
     </div>
   </div>
-</header>
+</nav>
 
 <!-- HERO -->
-<section style="padding:96px 0 80px; background:var(--bg);">
-  <div class="container-narrow">
-    <span class="badge" style="margin-bottom:28px; display:inline-flex;">UiPath AgentHack 2025</span>
-    <h1 style="font-size:54px; font-weight:800; line-height:1.1; letter-spacing:-2px; color:var(--ink); margin-bottom:22px;">
-      Did your last prompt<br>change break anything?
+<section style="padding:88px 0 72px;">
+  <div class="ws">
+    <div class="badge" style="margin-bottom:24px;"><span class="bd"></span>UiPath AgentHack 2025</div>
+    <h1 style="font-size:58px;font-weight:800;line-height:1.08;letter-spacing:-2.5px;margin-bottom:20px;max-width:640px;">
+      The Quality Layer for<br>Enterprise AI Agents.
     </h1>
-    <p style="font-size:18px; color:var(--ink-3); max-width:560px; line-height:1.7; margin-bottom:14px;">
-      You tweak the system prompt, swap the model, or clean up some wording. The agent still responds. But does it still <em>behave</em> the way it's supposed to?
+    <p style="font-size:18px;color:var(--t2);max-width:520px;line-height:1.7;margin-bottom:12px;">
+      Every prompt change, model swap, MCP update, and knowledge base refresh can silently break your agent's behavior.
     </p>
-    <p style="font-size:18px; color:var(--ink-3); max-width:560px; line-height:1.7; margin-bottom:40px;">
-      AgentProof runs your agent through a set of behavioral contracts after every change and surfaces exactly what regressed — before it reaches a real user.
+    <p style="font-size:18px;color:var(--t2);max-width:520px;line-height:1.7;margin-bottom:36px;">
+      AgentProof continuously validates behavioral contracts, detects regressions, and gives enterprises the confidence to ship AI systems at scale.
     </p>
-    <div style="display:flex; gap:12px; flex-wrap:wrap;">
-      <a href="/dashboard" class="btn btn-primary btn-lg">Open Dashboard</a>
-      <a href="#how-it-works" class="btn btn-secondary btn-lg">How it works</a>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:52px;">
+      <a href="/dashboard" class="btn bo bl">Open Dashboard</a>
+      <a href="#lifecycle" class="btn bg bl">See the Lifecycle</a>
+    </div>
+
+    <div class="term">
+      <div class="tbar">
+        <span class="td r"></span><span class="td y"></span><span class="td g"></span>
+        <span class="tt">agentproof — validation run</span>
+      </div>
+      <div class="tb">
+<pre style="white-space:pre;"><span class="tc">$</span> <span class="tw">agentproof validate</span> <span class="t2c">--suite shopease_refunds --target /v2/chat</span>
+
+  <span class="t2c">Loading   </span> <span class="tw">shopease_refunds</span><span class="t2c"> · 4 tests · 3 contracts each</span>
+  <span class="t2c">Baseline  </span> <span class="tw">run_a3f9b2c1</span><span class="t2c"> · 4/4 passed</span>
+
+  <span class="t2c">Running validation...</span>
+
+  <span class="tg">✓</span>  <span class="tw">refund_eligibility_confirmed </span>   <span class="tg">PASS</span>  <span class="t2c">97%  CRITICAL</span>
+  <span class="tr">✗</span>  <span class="tw">policy_citation_required     </span>   <span class="tr">FAIL</span>  <span class="t2c">91%  CRITICAL</span>  <span class="ty">← regression</span>
+  <span class="tr">✗</span>  <span class="tw">no_support_redirect          </span>   <span class="tr">FAIL</span>  <span class="t2c">87%  CRITICAL</span>  <span class="ty">← regression</span>
+  <span class="tg">✓</span>  <span class="tw">response_length_limit        </span>   <span class="tg">PASS</span>  <span class="t2c">94%  HIGH</span>
+
+  <span class="t2c">─────────────────────────────────────</span>
+  <span class="t2c">Drift Score  </span><span class="tr">75.0%   Status: FAILED</span>
+  <span class="t2c">Regressions  </span><span class="tr">2 critical</span>
+
+  <span class="tr">⊘</span> <span class="tw">Deployment blocked.</span> <span class="t2c">Human approval required.</span></pre>
+      </div>
     </div>
   </div>
 </section>
 
-<div class="divider"></div>
+<div class="hr"></div>
+
+<!-- THE GAP -->
+<section style="padding:72px 0;">
+  <div class="ws">
+    <p class="lbl" style="margin-bottom:12px;">The problem</p>
+    <h2 style="font-size:32px;font-weight:700;letter-spacing:-1px;margin-bottom:12px;">AI deployment has a quality gap.</h2>
+    <p style="font-size:16px;color:var(--t2);max-width:540px;margin-bottom:44px;">Software teams have CI/CD, test suites, and deployment gates. AI teams have prompts and hope.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--br);border:1px solid var(--br);border-radius:10px;overflow:hidden;">
+      <div style="background:var(--bg);padding:32px 28px;">
+        <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:20px;">Without AgentProof</div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;"><span style="color:var(--t3);font-family:var(--mono);font-size:12.5px;flex-shrink:0;margin-top:1px;">01</span><span style="font-size:14px;color:var(--t2);">Developer updates system prompt</span></div>
+          <div style="display:flex;align-items:flex-start;gap:12px;"><span style="color:var(--t3);font-family:var(--mono);font-size:12.5px;flex-shrink:0;margin-top:1px;">02</span><span style="font-size:14px;color:var(--t2);">Agent still responds to requests</span></div>
+          <div style="display:flex;align-items:flex-start;gap:12px;"><span style="color:var(--t3);font-family:var(--mono);font-size:12.5px;flex-shrink:0;margin-top:1px;">03</span><span style="font-size:14px;color:var(--t2);">Deployed to production</span></div>
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.18);border-radius:6px;margin-top:4px;">
+            <span style="color:var(--rd);flex-shrink:0;">✗</span>
+            <span style="font-size:13.5px;color:var(--rd);">Silent regression reaches customers</span>
+          </div>
+        </div>
+      </div>
+      <div style="background:var(--bg2);padding:32px 28px;">
+        <div style="font-size:11px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:20px;">With AgentProof</div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;"><span style="color:var(--t3);font-family:var(--mono);font-size:12.5px;flex-shrink:0;margin-top:1px;">01</span><span style="font-size:14px;color:var(--t2);">Developer updates system prompt</span></div>
+          <div style="display:flex;align-items:flex-start;gap:12px;"><span style="color:var(--t3);font-family:var(--mono);font-size:12.5px;flex-shrink:0;margin-top:1px;">02</span><span style="font-size:14px;color:var(--t2);">AgentProof validates 4 behavioral contracts</span></div>
+          <div style="display:flex;align-items:flex-start;gap:12px;"><span style="color:var(--t3);font-family:var(--mono);font-size:12.5px;flex-shrink:0;margin-top:1px;">03</span><span style="font-size:14px;color:var(--t2);">2 critical regressions detected · drift: 75%</span></div>
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.18);border-radius:6px;margin-top:4px;">
+            <span style="color:var(--gr);flex-shrink:0;">✓</span>
+            <span style="font-size:13.5px;color:var(--gr);">Deployment blocked before reaching users</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="hr"></div>
+
+<!-- LIFECYCLE -->
+<section id="lifecycle" style="padding:72px 0;">
+  <div class="ws">
+    <p class="lbl" style="margin-bottom:12px;">Agent lifecycle</p>
+    <h2 style="font-size:32px;font-weight:700;letter-spacing:-1px;margin-bottom:10px;">From prompt change to safe deployment.</h2>
+    <p style="font-size:16px;color:var(--t2);max-width:520px;margin-bottom:48px;">AgentProof sits between your changes and your users. Every release passes through a behavioral gate.</p>
+
+    <div class="tl">
+      <div class="tls">
+        <div class="tll"><div class="tln">1</div><div class="tlc"></div></div>
+        <div class="tlr">
+          <div class="tlt">Prompt or model updated</div>
+          <div class="tld">Developer changes the system prompt, swaps model version, updates MCP server, or refreshes knowledge base.</div>
+        </div>
+      </div>
+      <div class="tls">
+        <div class="tll"><div class="tln hi">2</div><div class="tlc"></div></div>
+        <div class="tlr">
+          <div class="tlt" style="color:var(--or);">AgentProof triggered</div>
+          <div class="tld">Runs as a UiPath coded agent (LangGraph pipeline). Loads behavioral test suite, targets the updated agent endpoint.</div>
+        </div>
+      </div>
+      <div class="tls">
+        <div class="tll"><div class="tln hi">3</div><div class="tlc"></div></div>
+        <div class="tlr">
+          <div class="tlt" style="color:var(--or);">LLM-as-judge evaluation</div>
+          <div class="tld">Each agent response is evaluated against every behavioral contract using GPT-4o. Returns pass/fail, 0–100% confidence, and natural language reasoning per contract.</div>
+        </div>
+      </div>
+      <div class="tls">
+        <div class="tll"><div class="tln hi">4</div><div class="tlc"></div></div>
+        <div class="tlr">
+          <div class="tlt" style="color:var(--or);">Regression detection</div>
+          <div class="tld">Current results compared to last passing baseline. Severity-weighted drift score: critical failures count 3×, high 2×, medium 1×.</div>
+        </div>
+      </div>
+      <div class="tls">
+        <div class="tll"><div class="tln hi">5</div><div class="tlc"></div></div>
+        <div class="tlr">
+          <div class="tlt" style="color:var(--or);">Deployment gate</div>
+          <div class="tld">PASSED (&lt;5% drift): ship. DEGRADED (5–15%): review. FAILED (&gt;15%): block, alert via Telegram, generate PDF report.</div>
+        </div>
+      </div>
+      <div class="tls">
+        <div class="tll"><div class="tln">6</div></div>
+        <div class="tlr" style="padding-bottom:0;">
+          <div class="tlt">Safe deployment</div>
+          <div class="tld">Every contract satisfied. Run persisted to PostgreSQL. Full traceability from change to deployment.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="hr"></div>
+
+<!-- FEATURES -->
+<section id="features" style="padding:72px 0;">
+  <div class="ws">
+    <p class="lbl" style="margin-bottom:12px;">Capabilities</p>
+    <h2 style="font-size:32px;font-weight:700;letter-spacing:-1px;margin-bottom:48px;">Full behavioral QA stack.</h2>
+    <div class="fg">
+      <div class="fc">
+        <div style="font-size:10.5px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:9px;">Behavioral Contracts</div>
+        <div style="font-size:14px;color:var(--t2);line-height:1.65;">Define pass/fail rules in JSON — intent checks, format compliance, safety, sentiment, and length limits. Attached to every test case with severity levels.</div>
+      </div>
+      <div class="fc">
+        <div style="font-size:10.5px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:9px;">LLM-as-Judge</div>
+        <div style="font-size:14px;color:var(--t2);line-height:1.65;">GPT-4o evaluates each response against each contract independently. Returns pass/fail, 0–100% confidence score, and natural language reasoning.</div>
+      </div>
+      <div class="fc">
+        <div style="font-size:10.5px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:9px;">Drift Detection</div>
+        <div style="font-size:14px;color:var(--t2);line-height:1.65;">Severity-weighted drift score compared against last passing baseline. PASSED / DEGRADED / FAILED thresholds with per-regression breakdown.</div>
+      </div>
+      <div class="fc">
+        <div style="font-size:10.5px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:9px;">Baseline Comparison</div>
+        <div style="font-size:14px;color:var(--t2);line-height:1.65;">Every PASSED run becomes the new baseline. Future runs are diffed against it with test-level granularity and regression history.</div>
+      </div>
+      <div class="fc">
+        <div style="font-size:10.5px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:9px;">Instant Alerts</div>
+        <div style="font-size:14px;color:var(--t2);line-height:1.65;">Telegram notification on FAILED status with run ID, drift score, and full regression list. Fires immediately after validation completes.</div>
+      </div>
+      <div class="fc">
+        <div style="font-size:10.5px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:9px;">PDF Reports</div>
+        <div style="font-size:14px;color:var(--t2);line-height:1.65;">Every run generates a shareable PDF with full per-contract breakdowns and LLM reasoning. Stored for audit trail and compliance review.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="hr"></div>
 
 <!-- DEMO -->
-<section id="demo" style="padding:80px 0; background:var(--bg-2);">
-  <div class="container-narrow">
-    <p style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.8px; color:var(--ink-4); margin-bottom:10px;">Live example</p>
-    <h2 style="font-size:32px; font-weight:700; letter-spacing:-0.8px; color:var(--ink); margin-bottom:10px;">The prompt got "warmer". The behavior broke.</h2>
-    <p style="font-size:15px; color:var(--ink-3); margin-bottom:36px; max-width:540px;">A ShopEasy refund agent was updated to sound more empathetic. Nobody noticed it stopped following 3 critical contracts.</p>
+<section id="demo" style="padding:72px 0;">
+  <div class="ws">
+    <p class="lbl" style="margin-bottom:12px;">Live regression example</p>
+    <h2 style="font-size:32px;font-weight:700;letter-spacing:-1px;margin-bottom:10px;">The prompt got "warmer". Three contracts broke.</h2>
+    <p style="font-size:16px;color:var(--t2);max-width:520px;margin-bottom:36px;">ShopEasy's refund agent was updated to sound more empathetic. AgentProof caught 3 critical regressions before deployment.</p>
 
-    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow);">
-      <div style="display:grid; grid-template-columns:1fr 1fr;">
-        <!-- V1 -->
-        <div style="padding:28px 32px; border-right:1px solid var(--border);">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:20px;">
-            <span style="width:7px; height:7px; background:var(--green); border-radius:50%; display:inline-block;"></span>
-            <span style="font-size:11px; font-weight:700; color:var(--green); text-transform:uppercase; letter-spacing:1px;">V1 — All contracts pass</span>
+    <div style="border:1px solid var(--br);border-radius:10px;overflow:hidden;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;">
+        <div style="padding:28px;border-right:1px solid var(--br);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+            <span style="width:6px;height:6px;background:var(--gr);border-radius:50%;display:inline-block;"></span>
+            <span style="font-size:11px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:1px;">V1 — Baseline · 4/4 passing</span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:12px;">
-            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Confirms customer is eligible for a refund</span></div>
-            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Cites Return Policy Section 3.1 by name</span></div>
-            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Resolves the request directly, no handoff</span></div>
-            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Response under 100 words</span></div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Confirms refund eligibility</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Cites Return Policy Section 3.1</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Resolves request directly, no handoff</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Response under 100 words</span></div>
           </div>
         </div>
-        <!-- V2 -->
-        <div style="padding:28px 32px; background:#fffcfa;">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:20px;">
-            <span style="width:7px; height:7px; background:var(--red); border-radius:50%; display:inline-block;"></span>
-            <span style="font-size:11px; font-weight:700; color:var(--red); text-transform:uppercase; letter-spacing:1px;">V2 — 3 regressions detected</span>
+        <div style="padding:28px;background:rgba(239,68,68,.03);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+            <span style="width:6px;height:6px;background:var(--rd);border-radius:50%;display:inline-block;"></span>
+            <span style="font-size:11px;font-weight:700;color:var(--rd);text-transform:uppercase;letter-spacing:1px;">V2 — 3 regressions detected</span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:12px;">
-            <div style="display:flex; gap:10px;"><span class="fail">✗</span><span style="font-size:14px; color:var(--ink-2);">No mention of refund eligibility</span></div>
-            <div style="display:flex; gap:10px;"><span class="fail">✗</span><span style="font-size:14px; color:var(--ink-2);">Policy never referenced</span></div>
-            <div style="display:flex; gap:10px;"><span class="fail">✗</span><span style="font-size:14px; color:var(--ink-2);">Tells the customer to contact support instead</span></div>
-            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Still sounds warm and friendly</span></div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="cx">✗</span><span style="font-size:13.5px;color:var(--t2);">No mention of refund eligibility</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="cx">✗</span><span style="font-size:13.5px;color:var(--t2);">Policy never referenced</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="cx">✗</span><span style="font-size:13.5px;color:var(--t2);">Tells customer to contact support team</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start;"><span class="ck">✓</span><span style="font-size:13.5px;color:var(--t2);">Still sounds warm and friendly</span></div>
           </div>
         </div>
       </div>
-      <div style="padding:14px 32px; background:var(--bg-2); border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
-        <span style="font-size:13px; color:var(--ink-3);">Drift score: <strong style="color:#c2410c;">75%</strong> &nbsp;·&nbsp; Status: <strong style="color:var(--red);">FAILED</strong></span>
-        <a href="/dashboard" style="font-size:13px; color:var(--orange); font-weight:600;">View full report →</a>
+      <div style="padding:11px 28px;background:var(--bg2);border-top:1px solid var(--br);display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-family:var(--mono);font-size:12px;color:var(--t3);">drift_score: <span style="color:var(--rd);">0.750</span> &nbsp;·&nbsp; status: <span style="color:var(--rd);">FAILED</span> &nbsp;·&nbsp; regressions: <span style="color:var(--rd);">2_critical</span></span>
+        <a href="/dashboard" style="font-size:13px;color:var(--or);font-weight:600;">View report →</a>
       </div>
     </div>
   </div>
 </section>
 
-<div class="divider"></div>
-
-<!-- HOW IT WORKS -->
-<section id="how-it-works" style="padding:80px 0; background:var(--bg);">
-  <div class="container-narrow">
-    <p style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.8px; color:var(--ink-4); margin-bottom:10px;">How it works</p>
-    <h2 style="font-size:32px; font-weight:700; letter-spacing:-0.8px; color:var(--ink); margin-bottom:52px;">Three steps, no setup overhead</h2>
-
-    <div style="display:flex; flex-direction:column; gap:40px;">
-      <div style="display:flex; gap:24px; align-items:flex-start;">
-        <div class="step-num">1</div>
-        <div>
-          <h3 style="font-size:17px; font-weight:700; color:var(--ink); margin-bottom:8px;">Write behavioral contracts</h3>
-          <p style="font-size:15px; color:var(--ink-3); max-width:520px; line-height:1.7;">Define the rules your agent must follow — always cite this policy, never redirect to support for simple requests, respond in under 100 words. Plain language, stored in JSON test suites alongside your code.</p>
-        </div>
-      </div>
-      <div style="display:flex; gap:24px; align-items:flex-start;">
-        <div class="step-num">2</div>
-        <div>
-          <h3 style="font-size:17px; font-weight:700; color:var(--ink); margin-bottom:8px;">Trigger from UiPath Orchestrator</h3>
-          <p style="font-size:15px; color:var(--ink-3); max-width:520px; line-height:1.7;">Run AgentProof as a native coded agent — pass your agent's endpoint and test suite ID. It calls the agent with each scenario, collects every response, and runs each one through an LLM judge that evaluates it against every contract.</p>
-        </div>
-      </div>
-      <div style="display:flex; gap:24px; align-items:flex-start;">
-        <div class="step-num">3</div>
-        <div>
-          <h3 style="font-size:17px; font-weight:700; color:var(--ink); margin-bottom:8px;">See exactly what changed</h3>
-          <p style="font-size:15px; color:var(--ink-3); max-width:520px; line-height:1.7;">Results are compared to the last passing baseline. You get a drift %, a list of regressions with LLM reasoning, and a per-contract breakdown — every run persisted to the dashboard.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
+<div class="hr"></div>
 
 <!-- CTA -->
-<section style="padding:72px 0; background:var(--bg-dark);">
-  <div class="container-narrow" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:28px;">
+<section style="padding:64px 0;">
+  <div class="ws" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:24px;">
     <div>
-      <h2 style="font-size:28px; font-weight:700; color:#fff; letter-spacing:-0.5px; margin-bottom:8px;">See it running live</h2>
-      <p style="font-size:15px; color:#78716c;">The dashboard shows real results from the demo above.</p>
+      <h2 style="font-size:26px;font-weight:700;letter-spacing:-.8px;margin-bottom:8px;">See it running on live data.</h2>
+      <p style="font-size:15px;color:var(--t2);">The dashboard shows real validation runs from the demo agents above.</p>
     </div>
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
-      <a href="/dashboard" class="btn btn-orange btn-lg">Open Dashboard</a>
-      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" class="btn btn-lg" style="background:transparent; color:#a8a29e; border:1.5px solid #292524;">View Source</a>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <a href="/dashboard" class="btn bo bl">Open Dashboard</a>
+      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" class="btn bg bl">View Source</a>
     </div>
   </div>
 </section>
 
-<!-- FOOTER -->
-<footer style="background:var(--bg); border-top:1px solid var(--border); padding:24px 0;">
-  <div class="container" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
-    <div style="display:flex; align-items:center; gap:8px;">
-      <span class="nav-badge" style="font-size:12px; padding:2px 8px;">AP</span>
-      <span style="font-size:13px; color:var(--ink-4);">AgentProof &nbsp;·&nbsp; UiPath AgentHack 2025</span>
+<div class="hr"></div>
+
+<footer style="padding:20px 0;">
+  <div class="w" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="lm" style="font-size:11px;padding:2px 7px;">AP</span>
+      <span style="font-size:13px;color:var(--t3);">AgentProof &nbsp;·&nbsp; UiPath AgentHack 2025</span>
     </div>
-    <div style="display:flex; gap:24px;">
-      <a href="/dashboard" style="font-size:13px; color:var(--ink-4);">Dashboard</a>
-      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" style="font-size:13px; color:var(--ink-4);">GitHub</a>
-      <a href="/health" style="font-size:13px; color:var(--ink-4);">API Status</a>
+    <div style="display:flex;gap:20px;">
+      <a href="/dashboard" style="font-size:12.5px;color:var(--t3);">Dashboard</a>
+      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" style="font-size:12.5px;color:var(--t3);">GitHub</a>
+      <a href="/health" style="font-size:12.5px;color:var(--t3);">API</a>
     </div>
   </div>
 </footer>
@@ -318,61 +488,92 @@ Keep it conversational and do not worry too much about policies."""
             runs = []
             error = str(e)
 
+        total = len(runs)
+        passed = sum(1 for r in runs if r["overall_status"] == "PASSED")
+        failed = sum(1 for r in runs if r["overall_status"] == "FAILED")
+        pass_rate = round(passed / total * 100) if total else 0
+
         rows = ""
         for r in runs:
             status = r["overall_status"]
-            color = _status_color(status)
+            pill = {"PASSED": "sp-p", "DEGRADED": "sp-d", "FAILED": "sp-f"}.get(status, "")
             drift = r["drift_score"] or 0
             regressions = r["regressions"]
             if isinstance(regressions, str):
                 regressions = json.loads(regressions)
             reg_count = len(regressions) if regressions else 0
             ts = str(r["timestamp"])[:19].replace("T", " ")
-            rows += f"""<tr onclick="window.location='/run/{r['id']}'" style="cursor:pointer;">
-              <td style="padding:14px 16px;color:#94A3B8;font-size:13px;">{ts}</td>
-              <td style="padding:14px 16px;color:#E2E8F0;font-weight:500;">{r['suite_id']}</td>
-              <td style="padding:14px 16px;"><span style="background:{color}22;color:{color};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">{status}</span></td>
-              <td style="padding:14px 16px;min-width:160px;">{_drift_bar(drift)}</td>
-              <td style="padding:14px 16px;color:{'#F43F5E' if reg_count>0 else '#10B981'};font-weight:600;">{reg_count}</td>
-              <td style="padding:14px 16px;color:#64748B;font-size:12px;font-family:monospace;">{str(r['id'])[:8]}…</td>
-            </tr>"""
+            reg_color = "#ef4444" if reg_count > 0 else "#22c55e"
+            rows += (
+                f'<tr onclick="window.location=\'/run/{r["id"]}\'" style="cursor:pointer;">'
+                f'<td style="padding:11px 16px;color:#52525b;font-family:monospace;font-size:12px;">{ts}</td>'
+                f'<td style="padding:11px 16px;font-weight:500;font-family:monospace;font-size:13px;">{r["suite_id"]}</td>'
+                f'<td style="padding:11px 16px;"><span class="sp {pill}">{status}</span></td>'
+                f'<td style="padding:11px 16px;">{_drift_bar(drift)}</td>'
+                f'<td style="padding:11px 16px;color:{reg_color};font-weight:600;font-size:13px;font-family:monospace;">{reg_count}</td>'
+                f'<td style="padding:11px 16px;color:#52525b;font-size:12px;font-family:monospace;">{str(r["id"])[:8]}…</td>'
+                f'</tr>'
+            )
 
-        error_banner = f'<div style="background:#F43F5E22;border:1px solid #F43F5E;color:#F43F5E;padding:12px 16px;border-radius:8px;margin-bottom:24px;">DB Error: {error}</div>' if error else ""
+        error_html = (
+            f'<div style="background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);'
+            f'color:#ef4444;padding:12px 16px;border-radius:6px;margin-bottom:20px;'
+            f'font-family:monospace;font-size:13px;">DB Error: {error}</div>'
+        ) if error else ""
+
+        empty_row = (
+            '<tr><td colspan="6" style="padding:40px;text-align:center;color:#52525b;font-size:13px;">'
+            'No runs yet &nbsp;·&nbsp; '
+            'Trigger from UiPath: <code style="color:#a1a1aa;">uipath run main.py \'{"suite_id":"shopease_refunds","agent_endpoint":"https://agentproof.vercel.app/v1/chat"}\'</code>'
+            '</td></tr>'
+        )
 
         return HTMLResponse(f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>AgentProof Dashboard</title>
-<style>*{{box-sizing:border-box;margin:0;padding:0;}}body{{background:#0F172A;color:#E2E8F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;}}tr:hover td{{background:#1E293B;}}</style>
-</head><body>
-<header style="background:#0F172A;border-bottom:1px solid #1E293B;padding:20px 40px;display:flex;align-items:center;gap:16px;">
-  <a href="/" style="background:#1E293B;border-radius:8px;padding:6px 14px;font-size:13px;color:#94A3B8;text-decoration:none;">← Home</a>
-  <div style="background:#7C3AED;border-radius:10px;padding:8px 14px;font-weight:700;font-size:18px;">AP</div>
-  <div><div style="font-size:20px;font-weight:700;">AgentProof</div><div style="font-size:12px;color:#64748B;">Behavioral Testing & Regression Detection</div></div>
-  <div style="margin-left:auto;display:flex;gap:32px;text-align:center;">
-    <div><div style="font-size:24px;font-weight:700;color:#7C3AED;">{len(runs)}</div><div style="font-size:11px;color:#64748B;">Total Runs</div></div>
-    <div><div style="font-size:24px;font-weight:700;color:#10B981;">{sum(1 for r in runs if r['overall_status']=='PASSED')}</div><div style="font-size:11px;color:#64748B;">Passed</div></div>
-    <div><div style="font-size:24px;font-weight:700;color:#F43F5E;">{sum(1 for r in runs if r['overall_status']=='FAILED')}</div><div style="font-size:11px;color:#64748B;">Failed</div></div>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Dashboard — AgentProof</title>
+  <style>{_DARK_CSS}</style>
+</head>
+<body>
+<header style="background:var(--bg);border-bottom:1px solid var(--br);padding:0 40px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:99;backdrop-filter:blur(12px);">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <a href="/" style="font-size:12.5px;color:var(--t3);padding:5px 10px;border:1px solid var(--br2);border-radius:5px;">← Home</a>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="lm">AP</span>
+      <span style="font-weight:700;font-size:15px;">AgentProof</span>
+      <span style="font-size:13px;color:var(--t3);margin-left:2px;">/ Dashboard</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:28px;">
+    <div style="text-align:right;"><div style="font-size:18px;font-weight:700;color:var(--or);font-family:monospace;">{total}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Runs</div></div>
+    <div style="text-align:right;"><div style="font-size:18px;font-weight:700;color:#22c55e;font-family:monospace;">{passed}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Passed</div></div>
+    <div style="text-align:right;"><div style="font-size:18px;font-weight:700;color:#ef4444;font-family:monospace;">{failed}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Failed</div></div>
+    <div style="text-align:right;"><div style="font-size:18px;font-weight:700;font-family:monospace;">{pass_rate}%</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Pass Rate</div></div>
   </div>
 </header>
-<main style="padding:40px;">
-  {error_banner}
-  <h2 style="font-size:14px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:1px;margin-bottom:24px;">Recent Runs</h2>
-  <div style="border:1px solid #1E293B;border-radius:12px;overflow:hidden;">
-    <table style="width:100%;border-collapse:collapse;">
-      <thead><tr style="border-bottom:1px solid #1E293B;">
-        <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748B;font-weight:500;">Timestamp</th>
-        <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748B;font-weight:500;">Suite</th>
-        <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748B;font-weight:500;">Status</th>
-        <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748B;font-weight:500;">Drift Score</th>
-        <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748B;font-weight:500;">Regressions</th>
-        <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748B;font-weight:500;">Run ID</th>
-      </tr></thead>
-      <tbody>{rows if rows else '<tr><td colspan="6" style="padding:40px;text-align:center;color:#475569;">No runs yet. Trigger AgentProof from UiPath Orchestrator to see results.</td></tr>'}</tbody>
+<main style="padding:32px 40px;max-width:1100px;">
+  {error_html}
+  <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);margin-bottom:14px;">Recent Validation Runs</div>
+  <div style="border:1px solid var(--br);border-radius:9px;overflow:hidden;background:var(--bg2);">
+    <table>
+      <thead>
+        <tr style="border-bottom:1px solid var(--br);">
+          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Timestamp</th>
+          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Suite</th>
+          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Status</th>
+          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Drift Score</th>
+          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Regressions</th>
+          <th style="padding:9px 16px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Run ID</th>
+        </tr>
+      </thead>
+      <tbody>{rows if rows else empty_row}</tbody>
     </table>
   </div>
 </main>
-</body></html>""")
+</body>
+</html>""")
 
     @app.get("/run/{run_id}", response_class=HTMLResponse)
     async def run_detail(run_id: str):
@@ -380,13 +581,20 @@ Keep it conversational and do not worry too much about policies."""
             from agentproof.db import get_run_by_id
             run = get_run_by_id(run_id)
         except Exception as e:
-            return HTMLResponse(f"<p style='color:red;padding:40px'>Error: {e}</p>", status_code=500)
+            return HTMLResponse(
+                f"<body style='background:#09090b;color:#ef4444;padding:40px;font-family:monospace;'>Error: {e}</body>",
+                status_code=500,
+            )
 
         if not run:
-            return HTMLResponse("<p style='padding:40px'>Run not found</p>", status_code=404)
+            return HTMLResponse(
+                "<body style='background:#09090b;color:#a1a1aa;padding:40px;font-family:monospace;'>Run not found.</body>",
+                status_code=404,
+            )
 
         status = run["overall_status"]
         color = _status_color(status)
+        pill = {"PASSED": "sp-p", "DEGRADED": "sp-d", "FAILED": "sp-f"}.get(status, "")
         drift = round((run["drift_score"] or 0) * 100, 1)
         ts = str(run["timestamp"])[:19].replace("T", " ")
         results = run["results"]
@@ -395,52 +603,84 @@ Keep it conversational and do not worry too much about policies."""
         regressions = run["regressions"]
         if isinstance(regressions, str):
             regressions = json.loads(regressions)
+        reg_count = len(regressions) if regressions else 0
 
         test_cards = ""
         for r in (results or []):
-            tc_color = "#10B981" if r["overall_pass"] else "#F43F5E"
-            tc_status = "PASS" if r["overall_pass"] else "FAIL"
+            tc_color = "#22c55e" if r["overall_pass"] else "#ef4444"
+            tc_label = "PASS" if r["overall_pass"] else "FAIL"
+            tc_pill = "sp-p" if r["overall_pass"] else "sp-f"
             contracts_html = ""
             for ev in r.get("contract_evaluations", []):
-                ev_color = "#10B981" if ev["passed"] else "#F43F5E"
-                contracts_html += f"""<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #1E293B;">
-                  <span style="color:{ev_color};font-weight:700;">{"✓" if ev["passed"] else "✗"}</span>
-                  <div style="flex:1;"><div style="font-size:12px;color:#94A3B8;font-family:monospace;">{ev['contract_id']}</div>
-                  <div style="font-size:13px;color:#CBD5E1;margin-top:2px;">{ev['reasoning']}</div></div>
-                  <span style="font-size:11px;color:#64748B;">{round(ev['confidence']*100)}%</span>
-                </div>"""
-            test_cards += f"""<div style="border:1px solid #1E293B;border-radius:12px;padding:20px;margin-bottom:16px;">
-              <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-                <span style="background:{tc_color}22;color:{tc_color};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;">{tc_status}</span>
-                <span style="font-weight:600;">{r['test_name']}</span>
-                <span style="margin-left:auto;font-size:11px;color:#64748B;text-transform:uppercase;">{r['severity']}</span>
-              </div>
-              <div style="background:#1E293B;border-radius:8px;padding:12px;margin-bottom:12px;">
-                <div style="font-size:11px;color:#64748B;margin-bottom:4px;">Agent Response</div>
-                <div style="font-size:13px;color:#CBD5E1;line-height:1.6;">{r['agent_response'][:300]}{"…" if len(r["agent_response"])>300 else ""}</div>
-              </div>{contracts_html}
-            </div>"""
+                ev_color = "#22c55e" if ev["passed"] else "#ef4444"
+                ev_icon = "✓" if ev["passed"] else "✗"
+                contracts_html += (
+                    f'<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #1f1f23;">'
+                    f'<span style="color:{ev_color};font-weight:700;flex-shrink:0;">{ev_icon}</span>'
+                    f'<div style="flex:1;">'
+                    f'<div style="font-size:11.5px;color:#52525b;font-family:monospace;margin-bottom:2px;">{ev["contract_id"]}</div>'
+                    f'<div style="font-size:13px;color:#a1a1aa;line-height:1.5;">{ev["reasoning"]}</div>'
+                    f'</div>'
+                    f'<span style="font-size:11px;color:#52525b;font-family:monospace;flex-shrink:0;">{round(ev["confidence"]*100)}%</span>'
+                    f'</div>'
+                )
+            resp_preview = r["agent_response"][:280] + ("…" if len(r["agent_response"]) > 280 else "")
+            test_cards += (
+                f'<div style="border:1px solid #1f1f23;border-radius:9px;padding:20px;margin-bottom:14px;background:#111113;">'
+                f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">'
+                f'<span class="sp {tc_pill}">{tc_label}</span>'
+                f'<span style="font-weight:600;font-size:14px;">{r["test_name"]}</span>'
+                f'<span style="margin-left:auto;font-size:10.5px;color:#52525b;text-transform:uppercase;letter-spacing:1px;font-family:monospace;">{r["severity"]}</span>'
+                f'</div>'
+                f'<div style="background:#18181b;border-radius:7px;padding:12px;margin-bottom:12px;">'
+                f'<div style="font-size:10.5px;color:#52525b;margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;">Agent Response</div>'
+                f'<div style="font-size:13px;color:#a1a1aa;line-height:1.6;">{resp_preview}</div>'
+                f'</div>'
+                f'{contracts_html}'
+                f'</div>'
+            )
 
         return HTMLResponse(f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"/><title>Run {run_id[:8]} — AgentProof</title>
-<style>*{{box-sizing:border-box;margin:0;padding:0;}}body{{background:#0F172A;color:#E2E8F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}}</style>
-</head><body>
-<header style="background:#0F172A;border-bottom:1px solid #1E293B;padding:20px 40px;display:flex;align-items:center;gap:16px;">
-  <a href="/dashboard" style="background:#1E293B;border-radius:8px;padding:6px 14px;font-size:13px;color:#94A3B8;text-decoration:none;">← Dashboard</a>
-  <div style="background:#7C3AED;border-radius:10px;padding:6px 12px;font-weight:700;">AP</div>
-  <div><div style="font-size:18px;font-weight:700;">Run Detail</div><div style="font-size:12px;color:#64748B;font-family:monospace;">{run_id}</div></div>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Run {run_id[:8]} — AgentProof</title>
+  <style>{_DARK_CSS}</style>
+</head>
+<body>
+<header style="background:var(--bg);border-bottom:1px solid var(--br);padding:0 40px;height:54px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:99;">
+  <a href="/dashboard" style="font-size:12.5px;color:var(--t3);padding:5px 10px;border:1px solid var(--br2);border-radius:5px;">← Dashboard</a>
+  <span class="lm">AP</span>
+  <span style="font-weight:700;font-size:15px;">AgentProof</span>
+  <span style="font-size:13px;color:var(--t3);">/ Run Detail</span>
+  <span style="font-family:monospace;font-size:12px;color:var(--t3);margin-left:4px;">{run_id[:8]}…</span>
 </header>
-<main style="padding:40px;max-width:900px;">
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;">
-    <div style="border:1px solid #1E293B;border-radius:12px;padding:20px;"><div style="font-size:11px;color:#64748B;text-transform:uppercase;margin-bottom:8px;">Status</div><div style="font-size:22px;font-weight:700;color:{color};">{status}</div></div>
-    <div style="border:1px solid #1E293B;border-radius:12px;padding:20px;"><div style="font-size:11px;color:#64748B;text-transform:uppercase;margin-bottom:8px;">Drift Score</div><div style="font-size:22px;font-weight:700;color:{color};">{drift}%</div></div>
-    <div style="border:1px solid #1E293B;border-radius:12px;padding:20px;"><div style="font-size:11px;color:#64748B;text-transform:uppercase;margin-bottom:8px;">Regressions</div><div style="font-size:22px;font-weight:700;color:{'#F43F5E' if regressions else '#10B981'};">{len(regressions) if regressions else 0}</div></div>
-    <div style="border:1px solid #1E293B;border-radius:12px;padding:20px;"><div style="font-size:11px;color:#64748B;text-transform:uppercase;margin-bottom:8px;">Suite</div><div style="font-size:16px;font-weight:600;">{run['suite_id']}</div></div>
+<main style="padding:32px 40px;max-width:960px;">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--br);border:1px solid var(--br);border-radius:9px;overflow:hidden;margin-bottom:28px;">
+    <div style="background:var(--bg2);padding:18px 20px;">
+      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;">Status</div>
+      <span class="sp {pill}" style="font-size:14px;padding:3px 10px;">{status}</span>
+    </div>
+    <div style="background:var(--bg2);padding:18px 20px;">
+      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;">Drift Score</div>
+      <div style="font-size:20px;font-weight:700;color:{color};font-family:monospace;">{drift}%</div>
+    </div>
+    <div style="background:var(--bg2);padding:18px 20px;">
+      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;">Regressions</div>
+      <div style="font-size:20px;font-weight:700;color:{'#ef4444' if reg_count>0 else '#22c55e'};font-family:monospace;">{reg_count}</div>
+    </div>
+    <div style="background:var(--bg2);padding:18px 20px;">
+      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;">Suite</div>
+      <div style="font-size:14px;font-weight:600;font-family:monospace;">{run["suite_id"]}</div>
+    </div>
   </div>
-  <div style="font-size:12px;color:#64748B;margin-bottom:24px;">{ts} UTC</div>
-  <h3 style="font-size:14px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">Test Cases</h3>
+  <div style="font-size:11.5px;color:var(--t3);font-family:monospace;margin-bottom:24px;">{ts} UTC</div>
+  <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);margin-bottom:14px;">Test Cases</div>
   {test_cards}
-</main></body></html>""")
+</main>
+</body>
+</html>""")
 
 except Exception as _startup_error:
     _tb = traceback.format_exc()
