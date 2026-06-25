@@ -3,9 +3,22 @@ import json
 import traceback
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 app = FastAPI(title="AgentProof")
+
+# ── Brand assets (inlined so they always ship with the Vercel bundle) ──
+import base64 as _b64
+_LOGO_96 = _b64.b64decode("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")
+_LOGO_32 = _b64.b64decode("iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAFhklEQVR42s1WbUyWVRi+7vPxPO+LGGqWJQFFfsxQrF6JeIUoUQg2zRk1K7VaWc3RRmQ2N61+tT62vrSV1XTh+poyl6Hmq2t+NGhGWKarCN9oNjPJFULyPu/znHP3AzRATWy1de/58Zzt3Ofaue/rXPdFSin8lyHwH8f5AQiCkhB0HimDrY8UAOAle5euAwasHUyiEOc+mpH0YQyuugKzovxbFx3rgDFQEkKA+Z/eQAoYAy8JEIom8UMz+M4oMALJo1z7Kb25nfZ8CwBKQkqYs9yGzsgiApgRGGgHM/O4qoxvugbQ2NeM7fsxZwouzwG6sbUJr26jzV+QCaAkQIMDIIK1kAq3F3B1GUdygAA7m/HyVmzaS8kAqSHMjnDVdOTnAgJ7DtBLMdR9RsacoWIDAQiwjBQXGx/hG69heNjchBdj2H6AAFIKSiIZwBoI4rKJ/PA0lE8BXMSaaM4rlPAhCP0gVP9wtAJUxkhlX5PfPCVvGCcACSitlesorZTWWmsVcnU4HAJCJN3i8c6Pz7j8jpsx0unZ2S8G0JwIRBDMJPnoL9jVIoaGYRh+AMMgIt/3pZRBYJh9AGyw8zs89jaKx+Dwr5DSAexZaeoHMAYAOrrJSdqt39K+I5QM4AcAQSmZTCaffebZ453HPc97tKYmEolEo9HCqQUq8/q28HWpQ9y2trgQgvq0u7cHRLAG0XE48jscibxsPtYJV2KoCxC8AJv2y87u4PKsrIPxeP1H9bNumdXa2pqdnT2AICtWrKiurpZS8sle9wJIgudjzXy7uxVDFD0x03I3CQFjWAh0JVHyho4fTa6trZ03fz4zFxQUHD58uKiwMOF5PTVITU1dvHhxTk5OZWVlXV1dyHWDnmr074cEFNDz0/dzAEQiEc/zTvxxgpl37NhxOuWnl0wPTLBq1SoAITc0sMkESEnv3s4vNKAoC/ddx0E3QKAQXtjFq/fgyeXLHMdZuOj+ObdWlpffXFFREYvFrLX2pCRlZGRIITs6OnqPO/0dBAHumWzrWyl7GIoy2QQAkDZU1h/w9Zjixt2fNH3RnJeXV1JSsi22raGxobCwsLy8vKysrKurKy0tbcH8Ba7rTp0abd67V2vdC9xzDylVyFFXpytA5Y5WUzLVhFHyqkvkhEsUSANi65YtxpjS0lIAWuv169Yxc1FR0eNLljAzW2bmQ4cOzZ07F4DjOP3eAQHG4uKhWFNq522m9yv4yjRYAyLIsJix2vfGzygtK62r2xCLxdasXhONRo01ie7uqqqqxoZGL5F4tKbm86amH9ra2tvbHe3YPjrer0RhwScMpSp2JRsgaYjA0Ckfx2K5k3KvjVwrhFi7dq2X8IIgGD58eHp6ejwenzRpYv4N0/Y1faaklEqZHvKcUa67DClCh0/S0PpyHjaE7thow6Oz2g621tbWtrS0pKSk5OfnA7DW5uZOXvTQg0KIt95df//Ir4sX6rIP8EuXUbK/3vWlaY+KhLQiUpXZgqtF/G45YUTvU3ccLaU8tfmUACy9GrwMr08TRModIERKDRS7vpI3N1vwg+L4ffK28Q7IJaFCjtJaOVqFHAU4w4e471VoXqrfKxUgqaU67Xx15pHJgCPx5TFq+JlnX4a7J9hRLje2U2cCUsC3CAIUp9sPp5viTF7ZyAt3khREA4T672eyBRyJlg76IM5jHdw1Hgsyud3HV7/TpWE8F7ErC5DKeGAHnv6KlCIS4MGPzL/wCZ4BLN+bzc9PxoXD8PURZKXggjTUH0RNM77vFK6GZZxt8tM5nV2PC0r6uCjE1WO5ehx++APL92PDTwSikELwt66CBmkdFSFhAYORYT7uIxmQowHA8jkSafDelABJSBhIAUUwPLis8zW/dJJm/7J17Mvg/5e7/hO16jEzQSYZNQAAAABJRU5ErkJggg==")
+
+@app.get("/logo.png")
+async def logo_png():
+    return Response(_LOGO_96, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+@app.get("/favicon.ico")
+async def favicon():
+    return Response(_LOGO_32, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 try:
     from dotenv import load_dotenv
@@ -290,6 +303,7 @@ Keep it conversational and do not worry too much about policies."""
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="icon" type="image/png" href="/logo.png"/>
   <title>AgentProof — Continuous Quality for Enterprise AI Agents</title>
   <style>
     *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -412,7 +426,7 @@ Keep it conversational and do not worry too much about policies."""
   <div class="w ni">
     <div class="nl">
       <div class="logo">
-        <span class="lm">AP</span>
+        <img src="/logo.png" alt="AgentProof" style="width:26px;height:26px;border-radius:6px;display:block;"/>
         <span class="ln">AgentProof</span>
       </div>
       <div class="nlinks">
@@ -735,7 +749,7 @@ Keep it conversational and do not worry too much about policies."""
 <footer style="padding:20px 0;">
   <div class="w" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
     <div style="display:flex;align-items:center;gap:8px;">
-      <span class="lm" style="font-size:11px;padding:2px 7px;">AP</span>
+      <img src="/logo.png" alt="AgentProof" style="width:20px;height:20px;border-radius:5px;display:block;"/>
       <span style="font-size:13px;color:var(--t3);">AgentProof &nbsp;·&nbsp; UiPath AgentHack 2025</span>
     </div>
     <div style="display:flex;gap:20px;">
@@ -806,6 +820,7 @@ Keep it conversational and do not worry too much about policies."""
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="icon" type="image/png" href="/logo.png"/>
   <title>AgentProof — The Deployment Gate for AI Agents</title>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -991,7 +1006,7 @@ Keep it conversational and do not worry too much about policies."""
 <body>
 
 <div class="bar">
-  <a href="/" class="logo"><span class="lm">AP</span><span class="ln">AgentProof</span></a>
+  <a href="/" class="logo"><img src="/logo.png" alt="AgentProof" style="width:26px;height:26px;border-radius:6px;display:block;"/><span class="ln">AgentProof</span></a>
   <div class="barright">
     <div class="enginebadge" id="engineBadge"><span class="d"></span><span id="engineText">connecting…</span></div>
     <a href="/dashboard" class="barlink">Dashboard →</a>
@@ -1463,6 +1478,7 @@ Keep it conversational and do not worry too much about policies."""
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="icon" type="image/png" href="/logo.png"/>
   <title>Dashboard — AgentProof</title>
   <style>{_DARK_CSS}{_DASH_CSS}</style>
 </head>
@@ -1471,7 +1487,7 @@ Keep it conversational and do not worry too much about policies."""
   <div style="display:flex;align-items:center;gap:12px;">
     <a href="/" style="font-size:12.5px;color:var(--t3);padding:5px 11px;border:1px solid var(--br2);border-radius:6px;">← Home</a>
     <div style="display:flex;align-items:center;gap:8px;">
-      <span class="lm">AP</span>
+      <img src="/logo.png" alt="AgentProof" style="width:26px;height:26px;border-radius:6px;display:block;"/>
       <span style="font-weight:700;font-size:15px;">AgentProof</span>
       <span style="font-size:13px;color:var(--t3);margin-left:2px;">/ Console</span>
     </div>
@@ -1631,13 +1647,14 @@ Keep it conversational and do not worry too much about policies."""
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="icon" type="image/png" href="/logo.png"/>
   <title>Run {run_id[:8]} — AgentProof</title>
   <style>{_DARK_CSS}{_DASH_CSS}{_REPORT_CSS}</style>
 </head>
 <body>
 <header style="background:rgba(9,9,11,.78);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);padding:0 40px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:99;">
   <a href="/dashboard" style="font-size:12.5px;color:var(--t3);padding:5px 11px;border:1px solid var(--br2);border-radius:6px;">← Dashboard</a>
-  <span class="lm">AP</span>
+  <img src="/logo.png" alt="AgentProof" style="width:26px;height:26px;border-radius:6px;display:block;"/>
   <span style="font-weight:700;font-size:15px;">AgentProof</span>
   <span style="font-size:13px;color:var(--t3);">/ Report</span>
   <span style="font-family:monospace;font-size:12px;color:var(--t3);margin-left:4px;">{run_id[:8]}…</span>
