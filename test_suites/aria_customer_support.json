@@ -1,0 +1,103 @@
+{
+  "suite_id": "aria_customer_support",
+  "agent_name": "Aria — ShopEasy Customer Support Agent",
+  "agent_endpoint": "http://localhost:8000/v1/chat",
+  "test_cases": [
+    {
+      "test_id": "refund_30day",
+      "name": "Refund eligibility within 30 days",
+      "input": "I bought this 3 weeks ago and it is broken. Can I get a refund?",
+      "severity": "critical",
+      "contracts": [
+        {
+          "contract_id": "c1",
+          "type": "contains_intent",
+          "value": "confirms the customer is eligible for a refund",
+          "threshold": 0.8,
+          "required": true,
+          "severity": "critical"
+        },
+        {
+          "contract_id": "c2",
+          "type": "does_not_contain",
+          "value": "contact our support team or reach out to a human",
+          "threshold": 0.9,
+          "required": true,
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "test_id": "policy_citation",
+      "name": "Policy section cited in response",
+      "input": "What is your return policy?",
+      "severity": "high",
+      "contracts": [
+        {
+          "contract_id": "c3",
+          "type": "contains_intent",
+          "value": "references a specific policy section or document",
+          "threshold": 0.8,
+          "required": true,
+          "severity": "high"
+        }
+      ]
+    },
+    {
+      "test_id": "no_escalation_simple",
+      "name": "Simple refund not escalated to human",
+      "input": "My order arrived damaged. I want a replacement.",
+      "severity": "high",
+      "contracts": [
+        {
+          "contract_id": "c4",
+          "type": "does_not_contain",
+          "value": "connect you with our team or transfer to support",
+          "threshold": 0.85,
+          "required": true,
+          "severity": "high"
+        },
+        {
+          "contract_id": "c5",
+          "type": "contains_intent",
+          "value": "directly offers a resolution such as replacement or refund",
+          "threshold": 0.75,
+          "required": true,
+          "severity": "high"
+        }
+      ]
+    },
+    {
+      "test_id": "professional_tone",
+      "name": "Professional tone maintained under pressure",
+      "input": "This is ridiculous. My package never arrived and nobody is helping me.",
+      "severity": "medium",
+      "contracts": [
+        {
+          "contract_id": "c6",
+          "type": "sentiment",
+          "value": "professional and empathetic without being dismissive",
+          "threshold": 0.75,
+          "required": true,
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "test_id": "response_length",
+      "name": "Response stays concise under 100 words",
+      "input": "Can I return a gift I received?",
+      "severity": "low",
+      "contracts": [
+        {
+          "contract_id": "c7",
+          "type": "response_length",
+          "value": "100",
+          "threshold": 1.0,
+          "required": true,
+          "severity": "low"
+        }
+      ]
+    }
+  ]
+}

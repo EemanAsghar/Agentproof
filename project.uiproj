@@ -1,0 +1,6 @@
+{
+  "ProjectType": "Agent",
+  "Name": "agentproof",
+  "Description": "Behavioral testing framework for AI agents",
+  "MainFile": null
+}

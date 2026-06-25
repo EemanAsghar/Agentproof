@@ -1,0 +1,88 @@
+{
+    "$schema": "https://cloud.uipath.com/draft/2024-12/entry-point",
+    "$id": "entry-points.json",
+    "entryPoints": [
+        {
+            "filePath": "agentproof",
+            "uniqueId": "a2cef9ae-451d-45fb-9fa8-2ab8aa2c414b",
+            "type": "agent",
+            "input": {
+                "type": "object",
+                "properties": {
+                    "suite_id": {
+                        "title": "Suite Id",
+                        "type": "string"
+                    },
+                    "agent_endpoint": {
+                        "title": "Agent Endpoint",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "suite_id",
+                    "agent_endpoint"
+                ],
+                "title": "Input"
+            },
+            "output": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "title": "Status",
+                        "type": "string"
+                    },
+                    "drift_score": {
+                        "title": "Drift Score",
+                        "type": "number"
+                    },
+                    "regressions_count": {
+                        "title": "Regressions Count",
+                        "type": "integer"
+                    },
+                    "run_id": {
+                        "title": "Run Id",
+                        "type": "string"
+                    },
+                    "report_path": {
+                        "title": "Report Path",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "status",
+                    "drift_score",
+                    "regressions_count",
+                    "run_id",
+                    "report_path"
+                ],
+                "title": "Output"
+            },
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "main.py:222",
+                        "name": "main",
+                        "type": "function",
+                        "metadata": {
+                            "file": "main.py"
+                        }
+                    },
+                    {
+                        "id": "main.py:201",
+                        "name": "build_graph",
+                        "type": "function",
+                        "metadata": {
+                            "file": "main.py"
+                        }
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "main.py:222",
+                        "target": "main.py:201"
+                    }
+                ]
+            }
+        }
+    ]
+}

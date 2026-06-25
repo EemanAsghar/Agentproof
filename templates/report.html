@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentProof Report — {{ run_id }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm 18mm 20mm 18mm;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0F172A;
+      color: #F1F5F9;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #7C3AED;
+      margin-bottom: 20px;
+    }
+
+    .header-left h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #7C3AED;
+      letter-spacing: -0.5px;
+    }
+
+    .header-left .tagline {
+      font-size: 10px;
+      color: #94A3B8;
+      margin-top: 2px;
+    }
+
+    .header-right {
+      text-align: right;
+      color: #94A3B8;
+      font-size: 10px;
+      line-height: 1.8;
+    }
+
+    .header-right .run-id {
+      font-family: monospace;
+      font-size: 9px;
+      color: #64748B;
+    }
+
+    /* ── Summary card ───────────────────────────────────────── */
+    .summary-card {
+      background: #1E293B;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .summary-left h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #F1F5F9;
+      margin-bottom: 4px;
+    }
+
+    .summary-left .suite-id {
+      font-size: 9px;
+      color: #94A3B8;
+      font-family: monospace;
+    }
+
+    .summary-right {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .metric {
+      text-align: center;
+    }
+
+    .metric-value {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .metric-label {
+      font-size: 9px;
+      color: #94A3B8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 3px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #0F172A;
+    }
+
+    .divider {
+      width: 1px;
+      height: 40px;
+      background: #334155;
+    }
+
+    /* ── Section headings ───────────────────────────────────── */
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #7C3AED;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #334155;
+    }
+
+    /* ── Tables ─────────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-size: 10px;
+    }
+
+    thead th {
+      background: #1E293B;
+      color: #94A3B8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-size: 9px;
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid #334155;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #1E293B;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #0F1929;
+    }
+
+    tbody td {
+      padding: 8px 10px;
+      vertical-align: top;
+      color: #CBD5E1;
+    }
+
+    /* ── Severity badges ────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-critical { background: #4C0519; color: #F43F5E; }
+    .badge-high     { background: #431407; color: #F97316; }
+    .badge-medium   { background: #422006; color: #F59E0B; }
+    .badge-low      { background: #052e16; color: #10B981; }
+
+    /* ── Pass / Fail indicators ─────────────────────────────── */
+    .pass { color: #10B981; font-weight: 700; }
+    .fail { color: #F43F5E; font-weight: 700; }
+
+    /* ── Regressions section ────────────────────────────────── */
+    .regression-row td {
+      background: #1a0a0a;
+    }
+
+    .reasoning-text {
+      color: #94A3B8;
+      font-style: italic;
+      font-size: 9px;
+      line-height: 1.4;
+    }
+
+    .response-preview {
+      color: #64748B;
+      font-size: 9px;
+      font-style: italic;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── No regressions callout ─────────────────────────────── */
+    .no-regressions {
+      background: #052e16;
+      border: 1px solid #10B981;
+      border-radius: 6px;
+      padding: 12px 16px;
+      color: #10B981;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    /* ── Full results matrix ────────────────────────────────── */
+    .contract-grid {
+      display: inline-flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .contract-chip {
+      font-size: 8px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    .contract-chip-pass { background: #052e16; color: #10B981; }
+    .contract-chip-fail { background: #4C0519; color: #F43F5E; }
+
+    /* ── Footer ─────────────────────────────────────────────── */
+    .footer {
+      margin-top: 32px;
+      padding-top: 12px;
+      border-top: 1px solid #334155;
+      display: flex;
+      justify-content: space-between;
+      color: #475569;
+      font-size: 9px;
+    }
+
+    .footer .brand {
+      color: #7C3AED;
+      font-weight: 600;
+    }
+
+    /* ── Page break hints ───────────────────────────────────── */
+    .page-break { page-break-before: always; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1>AgentProof</h1>
+      <div class="tagline">Behavioral Testing for AI Agents</div>
+    </div>
+    <div class="header-right">
+      <div>{{ timestamp }}</div>
+      <div>Suite: <strong>{{ suite_id }}</strong></div>
+      <div class="run-id">Run ID: {{ run_id }}</div>
+    </div>
+  </div>
+
+  <!-- Summary card -->
+  <div class="summary-card">
+    <div class="summary-left">
+      <h2>{{ agent_name }}</h2>
+      <div class="suite-id">{{ suite_id }}</div>
+    </div>
+    <div class="summary-right">
+      <div class="metric">
+        <div class="metric-value" style="color: {{ status_color }};">{{ drift_percent }}%</div>
+        <div class="metric-label">Drift Score</div>
+      </div>
+      <div class="divider"></div>
+      <div class="metric">
+        <div class="metric-value pass">{{ passed_tests }}</div>
+        <div class="metric-label">Passed</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value fail">{{ failed_tests }}</div>
+        <div class="metric-label">Failed</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value" style="color: #94A3B8;">{{ total_tests }}</div>
+        <div class="metric-label">Total</div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div class="status-badge" style="background: {{ status_color }};">{{ status }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Regressions section -->
+  <div class="section-title">Regressions Detected</div>
+
+  {% if regressions %}
+  <table>
+    <thead>
+      <tr>
+        <th>Test Name</th>
+        <th>Severity</th>
+        <th>Was → Now</th>
+        <th>Failed Contract</th>
+        <th>Judge Reasoning</th>
+        <th>Agent Response</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for reg in regressions %}
+        {% for fc in reg.failed_contracts %}
+        <tr class="regression-row">
+          {% if loop.first %}
+          <td rowspan="{{ reg.failed_contracts | length }}">{{ reg.test_name }}</td>
+          <td rowspan="{{ reg.failed_contracts | length }}">
+            <span class="badge badge-{{ reg.severity }}">{{ reg.severity }}</span>
+          </td>
+          <td rowspan="{{ reg.failed_contracts | length }}">
+            <span class="pass">{{ reg.was }}</span> →
+            <span class="fail">{{ reg.now }}</span>
+          </td>
+          {% endif %}
+          <td><span style="font-family: monospace; color: #7C3AED;">{{ fc.contract_id }}</span></td>
+          <td><span class="reasoning-text">{{ fc.reasoning }}</span></td>
+          {% if loop.first %}
+          <td rowspan="{{ reg.failed_contracts | length }}">
+            <span class="response-preview">{{ reg.agent_response[:120] }}{% if reg.agent_response | length > 120 %}…{% endif %}</span>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="no-regressions">
+    ✓ No regressions detected — all tests match or improve on the baseline.
+  </div>
+  {% endif %}
+
+  <!-- Full results matrix -->
+  <div class="section-title">Full Test Results</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Test</th>
+        <th>Severity</th>
+        <th>Result</th>
+        <th>Contracts</th>
+        <th>Agent Response</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for result in results %}
+      <tr>
+        <td>
+          <strong>{{ result.test_name }}</strong><br/>
+          <span style="font-family: monospace; color: #475569; font-size: 8px;">{{ result.test_id }}</span>
+        </td>
+        <td>
+          <span class="badge badge-{{ result.severity }}">{{ result.severity }}</span>
+        </td>
+        <td>
+          {% if result.overall_pass %}
+            <span class="pass">PASS</span>
+          {% else %}
+            <span class="fail">FAIL</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="contract-grid">
+            {% for ev in result.contract_evaluations %}
+            <span class="contract-chip {% if ev.passed %}contract-chip-pass{% else %}contract-chip-fail{% endif %}"
+                  title="{{ ev.reasoning }}">
+              {{ ev.contract_id }} {% if ev.passed %}✓{% else %}✗{% endif %}
+            </span>
+            {% endfor %}
+          </div>
+          {% for ev in result.contract_evaluations if not ev.passed %}
+          <div class="reasoning-text" style="margin-top: 3px;">
+            {{ ev.contract_id }}: {{ ev.reasoning }}
+          </div>
+          {% endfor %}
+        </td>
+        <td>
+          <span class="response-preview">
+            {{ result.agent_response[:150] }}{% if result.agent_response | length > 150 %}…{% endif %}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span><span class="brand">AgentProof</span> — Behavioral Testing for AI Agents</span>
+    <span>Generated by AgentProof — UiPath AgentHack 2026</span>
+  </div>
+
+</body>
+</html>
