@@ -316,6 +316,83 @@ Keep it conversational and do not worry too much about policies."""
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    # ── Native UiPath: connect tenant + discover published agents ──────────────
+    class UiPathConnectReq(BaseModel):
+        base_url: str
+        token: str
+
+    @app.post("/api/uipath/agents")
+    async def uipath_agents(req: UiPathConnectReq):
+        """List published agents (Orchestrator Releases) across the user's folders."""
+        import httpx
+        base = req.base_url.strip().rstrip("/")
+        token = req.token.strip()
+        if token.lower().startswith("bearer "):
+            token = token[7:]
+        H = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        try:
+            async with httpx.AsyncClient(timeout=25.0) as client:
+                # 1) discover folders the user can see
+                folders = []
+                for fpath in (
+                    "/orchestrator_/api/FoldersNavigation/GetAllFoldersForCurrentUser",
+                    "/orchestrator_/odata/Folders",
+                ):
+                    fr = await client.get(base + fpath, headers=H)
+                    if fr.status_code == 401:
+                        return {"ok": False, "error": "Token expired or invalid (401). Paste a fresh token from your UiPath session."}
+                    if fr.status_code == 403:
+                        return {"ok": False, "error": "Token lacks permission to list folders (403)."}
+                    if fr.status_code >= 400:
+                        continue
+                    try:
+                        body = fr.json()
+                    except Exception:
+                        continue
+                    items = body.get("value") if isinstance(body, dict) else body
+                    if items is None and isinstance(body, dict):
+                        items = body.get("PageItems") or body.get("items")
+                    if items:
+                        for f in items:
+                            fid = f.get("Id") or f.get("id") or f.get("Key")
+                            fname = (f.get("FullyQualifiedName") or f.get("DisplayName")
+                                     or f.get("Name") or f.get("fullyQualifiedName"))
+                            if fid is not None:
+                                folders.append({"id": fid, "name": fname or str(fid)})
+                        break
+                if not folders:
+                    return {"ok": False, "error": "Connected, but could not enumerate folders for this token."}
+
+                # 2) list releases (published processes/agents) per folder
+                agents, seen = [], set()
+                for f in folders[:12]:
+                    rr = await client.get(
+                        base + "/orchestrator_/odata/Releases?$select=Name,Key,ProcessKey,ProcessVersion",
+                        headers={**H, "X-UIPATH-OrganizationUnitId": str(f["id"])},
+                    )
+                    if rr.status_code >= 400:
+                        continue
+                    try:
+                        rels = rr.json().get("value", [])
+                    except Exception:
+                        rels = []
+                    for rel in rels:
+                        key = rel.get("Key") or rel.get("ProcessKey")
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        agents.append({
+                            "name": rel.get("Name") or rel.get("ProcessKey"),
+                            "key": key,
+                            "process_key": rel.get("ProcessKey"),
+                            "version": rel.get("ProcessVersion"),
+                            "folder": f["name"],
+                            "folder_id": f["id"],
+                        })
+                return {"ok": True, "agents": agents, "folders": len(folders)}
+        except Exception as e:
+            return {"ok": False, "error": f"Could not reach Orchestrator: {e}"}
+
     def _status_color(status: str) -> str:
         return {"PASSED": "#22c55e", "DEGRADED": "#eab308", "FAILED": "#ef4444"}.get(status, "#71717a")
 
@@ -1651,12 +1728,12 @@ Keep it conversational and do not worry too much about policies."""
   <p class="lead">Point AgentProof at your agent, describe what it should do in plain English, and let AI write the behavioral contracts. No JSON, no config — just click Validate and watch it run.</p>
 
   <div class="tabs">
-    <div class="tab on">Paste endpoint</div>
-    <div class="tab soon" title="Coming soon">Connect UiPath tenant · soon</div>
+    <div class="tab on" data-tab="endpoint">Paste endpoint</div>
+    <div class="tab" data-tab="uipath"><img src="/logo.png" style="width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:5px;"/>Connect UiPath tenant</div>
   </div>
 
-  <!-- STEP 1 -->
-  <div class="card">
+  <!-- PANEL: ENDPOINT -->
+  <div class="card" id="panelEndpoint">
     <div class="step"><span class="snum">1</span><span class="stitle">Connect your agent</span></div>
     <div class="row">
       <label>Agent endpoint URL</label>
@@ -1674,6 +1751,38 @@ Keep it conversational and do not worry too much about policies."""
     <button class="btn primary" id="genBtn">✨ Generate contracts</button>
     <span class="hintlink" id="demoLink">or try it on our demo agent</span>
     <div id="genErr"></div>
+  </div>
+
+  <!-- PANEL: UIPATH -->
+  <div class="card hidden" id="panelUiPath">
+    <div class="step"><span class="snum">1</span><span class="stitle">Connect your UiPath tenant</span></div>
+    <p class="muted" style="margin-bottom:16px;">AgentProof discovers the agents published in your Orchestrator, so every UiPath agent can pass through validation before deployment.</p>
+    <div class="row">
+      <label>Orchestrator URL</label>
+      <input id="uipUrl" class="mono" value="https://staging.uipath.com/hackathon26_977/DefaultTenant"/>
+    </div>
+    <div class="row">
+      <label>Access token / PAT</label>
+      <input id="uipToken" class="mono" type="password" placeholder="paste a token from your UiPath session"/>
+      <div class="muted" style="margin-top:6px;">Used server-side to call Orchestrator. Never stored. UiPath tokens expire ~1h — paste a fresh one.</div>
+    </div>
+    <button class="btn primary" id="connectBtn">🔌 Connect &amp; discover agents</button>
+    <div id="uipConnErr"></div>
+
+    <div id="uipPicker" class="hidden" style="margin-top:20px;border-top:1px solid var(--br);padding-top:18px;">
+      <label>Published agents <span id="uipCount" class="muted"></span></label>
+      <select id="uipSelect" class="mono" style="margin-bottom:14px;"></select>
+      <div class="row">
+        <label>Agent runtime endpoint <span class="muted">(where AgentProof calls it)</span></label>
+        <input id="uipEndpoint" class="mono" placeholder="https://...  (job-invocation coming next)"/>
+      </div>
+      <div class="row">
+        <label>What should this agent do? (plain English)</label>
+        <textarea id="uipDesc" placeholder="Describe the expected behaviour of the selected agent…"></textarea>
+      </div>
+      <button class="btn primary" id="uipGenBtn">✨ Generate contracts</button>
+      <div id="uipGenErr"></div>
+    </div>
   </div>
 
   <!-- STEP 2 -->
@@ -1714,26 +1823,84 @@ Keep it conversational and do not worry too much about policies."""
 
   function sevWeight(s){ return {critical:3,high:2,medium:1,low:0.5}[s]||1; }
 
+  // ---- tabs ----
+  function activeTab(){ var t=document.querySelector('.tab.on'); return t?t.dataset.tab:'endpoint'; }
+  document.querySelectorAll('.tab').forEach(function(tab){
+    tab.onclick = function(){
+      document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('on'); });
+      tab.classList.add('on');
+      var t = tab.dataset.tab;
+      $('panelEndpoint').classList.toggle('hidden', t!=='endpoint');
+      $('panelUiPath').classList.toggle('hidden', t!=='uipath');
+    };
+  });
+
+  // ---- which inputs are live, per active tab ----
+  function getInputs(){
+    if(activeTab()==='uipath'){
+      return { endpoint:$('uipEndpoint').value.trim(), desc:$('uipDesc').value.trim(),
+               auth:null, field:'message', errEl:'uipGenErr' };
+    }
+    return { endpoint:$('endpoint').value.trim(), desc:$('desc').value.trim(),
+             auth:$('auth').value.trim()||null, field:$('field').value.trim()||'message', errEl:'genErr' };
+  }
+
+  // ---- connect to UiPath tenant + discover agents ----
+  $('connectBtn').onclick = async function(){
+    clearErr('uipConnErr');
+    var url = $('uipUrl').value.trim(), token = $('uipToken').value.trim();
+    if(!url || !token){ err('uipConnErr','Enter your Orchestrator URL and a token.'); return; }
+    var b=$('connectBtn'); var old=b.innerHTML; b.disabled=true; b.innerHTML='<span class="spin"></span> Connecting…';
+    try{
+      var r = await fetch('/api/uipath/agents',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({base_url:url, token:token})});
+      var j = await r.json();
+      if(!j.ok){ err('uipConnErr', j.error||'Could not connect.'); return; }
+      var agents = j.agents||[];
+      if(!agents.length){ err('uipConnErr','Connected, but no published agents were found in this tenant.'); return; }
+      var sel=$('uipSelect'); sel.innerHTML='';
+      agents.forEach(function(a,i){
+        var o=document.createElement('option'); o.value=i;
+        o.textContent = a.name + (a.version?(' · v'+a.version):'') + (a.folder?('  ('+a.folder+')'):'');
+        sel.appendChild(o);
+      });
+      window._uipAgents = agents;
+      $('uipCount').textContent = '· '+agents.length+' discovered live';
+      $('uipPicker').classList.remove('hidden');
+      applyAgent(0);
+      sel.onchange = function(){ applyAgent(parseInt(sel.value,10)); };
+    }catch(e){ err('uipConnErr', String(e)); }
+    finally{ b.disabled=false; b.innerHTML=old; }
+  };
+
+  function applyAgent(i){
+    var a = (window._uipAgents||[])[i]; if(!a) return;
+    // sensible default runtime endpoint for the bundled demo agent
+    if(!$('uipEndpoint').value.trim()){ $('uipEndpoint').value = window.location.origin + '/v2/chat'; }
+    $('uipDesc').setAttribute('placeholder','Describe what "'+a.name+'" should do…');
+  }
+
   $('genBtn').onclick = generate;
+  $('uipGenBtn').onclick = generate;
   $('regenBtn').onclick = generate;
 
   async function generate(){
-    clearErr('genErr');
-    var desc = $('desc').value.trim();
-    var ep = $('endpoint').value.trim();
-    if(!ep){ err('genErr','Enter your agent endpoint URL first.'); return; }
-    if(desc.length < 15){ err('genErr','Describe what the agent should do (a sentence or two).'); return; }
-    var b = $('genBtn'); var old = b.innerHTML; b.disabled=true; b.innerHTML='<span class="spin"></span> Generating…';
+    var inp = getInputs();
+    clearErr(inp.errEl);
+    if(!inp.endpoint){ err(inp.errEl,'Enter the agent runtime endpoint first.'); return; }
+    if(inp.desc.length < 15){ err(inp.errEl,'Describe what the agent should do (a sentence or two).'); return; }
+    var b = (activeTab()==='uipath') ? $('uipGenBtn') : $('genBtn');
+    var old = b.innerHTML; b.disabled=true; b.innerHTML='<span class="spin"></span> Generating…';
     try{
       var r = await fetch('/api/generate-suite',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({description:desc, agent_name:slug(ep)})});
+        body:JSON.stringify({description:inp.desc, agent_name:slug(inp.endpoint)})});
       var j = await r.json();
-      if(!j.ok){ err('genErr', j.error||'Generation failed.'); return; }
-      suite = j.test_cases; suiteId = 'byo_'+slug(ep);
+      if(!j.ok){ err(inp.errEl, j.error||'Generation failed.'); return; }
+      suite = j.test_cases; suiteId = (activeTab()==='uipath'?'uipath_':'byo_')+slug(inp.endpoint);
       renderContracts(suite);
       $('step2').classList.remove('hidden');
       $('step2').scrollIntoView({behavior:'smooth',block:'start'});
-    }catch(e){ err('genErr', String(e)); }
+    }catch(e){ err(inp.errEl, String(e)); }
     finally{ b.disabled=false; b.innerHTML=old; }
   }
 
@@ -1770,7 +1937,8 @@ Keep it conversational and do not worry too much about policies."""
     $('runBtn').disabled=true;
     $('step3').scrollIntoView({behavior:'smooth',block:'start'});
 
-    var payloadBase = { endpoint:$('endpoint').value.trim(), auth_header:$('auth').value.trim()||null, input_field:$('field').value.trim()||'message' };
+    var inp = getInputs();
+    var payloadBase = { endpoint:inp.endpoint, auth_header:inp.auth, input_field:inp.field };
 
     for(var i=0;i<suite.length;i++){
       var tc = suite[i];
