@@ -85,6 +85,34 @@ def get_run_history(suite_id: str) -> list:
             return cur.fetchall()
 
 
+def get_all_runs() -> list:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions
+                FROM test_runs
+                ORDER BY timestamp DESC
+                LIMIT 50
+                """
+            )
+            return cur.fetchall()
+
+
+def get_run_by_id(run_id: str) -> dict | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions, results
+                FROM test_runs
+                WHERE id = %s
+                """,
+                (run_id,),
+            )
+            return cur.fetchone()
+
+
 if __name__ == "__main__":
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:

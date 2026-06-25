@@ -1,5 +1,5 @@
-# Vercel only needs demo agent deps — not uipath/langgraph
 fastapi>=0.110.0
 uvicorn>=0.29.0
 openai>=1.30.0
 python-dotenv>=1.0.0
+psycopg2-binary>=2.9.0
