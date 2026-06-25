@@ -81,152 +81,227 @@ Keep it conversational and do not worry too much about policies."""
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>AgentProof — Behavioral Testing for AI Agents</title>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:#fafaf9;color:#1c1917;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6;}
-    a{text-decoration:none;color:inherit;}
-    .nav-link{font-size:14px;color:#78716c;padding:6px 12px;border-radius:6px;transition:background 0.15s;}
-    .nav-link:hover{background:#f5f5f4;color:#1c1917;}
-    .btn-dark{display:inline-block;background:#1c1917;color:#fff;padding:11px 24px;border-radius:7px;font-size:14px;font-weight:600;transition:opacity 0.15s;}
-    .btn-dark:hover{opacity:0.85;}
-    .btn-outline{display:inline-block;background:transparent;color:#1c1917;padding:11px 24px;border-radius:7px;font-size:14px;font-weight:500;border:1.5px solid #d6d3d1;transition:border-color 0.15s;}
-    .btn-outline:hover{border-color:#a8a29e;}
-    section{padding:80px 0;}
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --orange: #f97316;
+      --orange-light: #fff7ed;
+      --orange-border: #fed7aa;
+      --green: #16a34a;
+      --red: #dc2626;
+      --ink: #111110;
+      --ink-2: #3d3d3a;
+      --ink-3: #6b6b66;
+      --ink-4: #a3a39e;
+      --bg: #ffffff;
+      --bg-2: #f7f7f5;
+      --bg-dark: #111110;
+      --border: #e8e8e4;
+      --radius: 8px;
+      --radius-sm: 5px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow: 0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.05);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { text-decoration: none; color: inherit; }
+
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 48px; }
+    .container-narrow { max-width: 760px; margin: 0 auto; padding: 0 48px; }
+
+    /* Nav */
+    header { background: rgba(255,255,255,0.94); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+    .nav { height: 64px; display: flex; align-items: center; justify-content: space-between; }
+    .nav-logo { display: flex; align-items: center; gap: 10px; }
+    .nav-badge { background: var(--orange); color: #fff; border-radius: var(--radius-sm); padding: 3px 9px; font-weight: 800; font-size: 13px; letter-spacing: -0.2px; }
+    .nav-name { font-weight: 700; font-size: 15px; color: var(--ink); }
+    .nav-links { display: flex; align-items: center; gap: 2px; }
+    .nav-link { font-size: 14px; color: var(--ink-3); padding: 6px 12px; border-radius: 6px; transition: background .15s, color .15s; }
+    .nav-link:hover { background: var(--bg-2); color: var(--ink); }
+    .nav-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap; }
+    .btn-primary { background: var(--ink); color: #fff; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: #2a2a27; box-shadow: var(--shadow); }
+    .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
+    .btn-secondary:hover { border-color: #c8c8c2; background: var(--bg-2); }
+    .btn-orange { background: var(--orange); color: #fff; box-shadow: var(--shadow-sm); }
+    .btn-orange:hover { background: #ea6c00; box-shadow: var(--shadow); }
+    .btn-lg { padding: 13px 28px; font-size: 15px; border-radius: 9px; }
+
+    /* Badge */
+    .badge { display: inline-flex; align-items: center; gap: 6px; background: var(--orange-light); color: #c2410c; border: 1px solid var(--orange-border); border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--border); }
+
+    /* Check/cross */
+    .pass { color: var(--green); font-weight: 700; }
+    .fail { color: var(--red); font-weight: 700; }
+
+    /* Step number */
+    .step-num { flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%; background: var(--orange-light); border: 2px solid var(--orange-border); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: var(--orange); }
   </style>
 </head>
 <body>
 
 <!-- NAV -->
-<header style="background:#fafaf9;border-bottom:1px solid #e7e5e4;position:sticky;top:0;z-index:50;">
-  <div style="max-width:1100px;margin:0 auto;padding:0 40px;height:60px;display:flex;align-items:center;justify-content:space-between;">
-    <div style="display:flex;align-items:center;gap:32px;">
-      <div style="display:flex;align-items:center;gap:9px;">
-        <div style="background:#f97316;color:#fff;border-radius:6px;padding:4px 9px;font-weight:800;font-size:13px;letter-spacing:-0.3px;">AP</div>
-        <span style="font-weight:700;font-size:15px;color:#1c1917;">AgentProof</span>
-      </div>
-      <nav style="display:flex;gap:4px;">
+<header>
+  <div class="container nav">
+    <div class="nav-logo">
+      <span class="nav-badge">AP</span>
+      <span class="nav-name">AgentProof</span>
+      <div class="nav-links" style="margin-left:16px;">
         <a href="#how-it-works" class="nav-link">How it works</a>
         <a href="#demo" class="nav-link">Demo</a>
         <a href="/dashboard" class="nav-link">Dashboard</a>
-      </nav>
+      </div>
     </div>
-    <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" class="nav-link" style="display:flex;align-items:center;gap:6px;">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-      GitHub
-    </a>
+    <div class="nav-actions">
+      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" class="btn btn-secondary" style="font-weight:500;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="opacity:.7"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+        GitHub
+      </a>
+    </div>
   </div>
 </header>
 
 <!-- HERO -->
-<section style="padding:100px 0 80px;background:#fafaf9;">
-  <div style="max-width:820px;margin:0 auto;padding:0 40px;">
-    <div style="display:inline-block;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;letter-spacing:0.5px;margin-bottom:28px;">UiPath AgentHack 2025</div>
-    <h1 style="font-size:52px;font-weight:800;line-height:1.1;letter-spacing:-1.5px;color:#1c1917;margin-bottom:24px;">Did your last prompt<br/>change break anything?</h1>
-    <p style="font-size:18px;color:#57534e;max-width:580px;margin-bottom:16px;">You tweak the system prompt, swap the model, or clean up some wording. The agent still responds. But does it still <em>behave</em> the way it's supposed to?</p>
-    <p style="font-size:18px;color:#57534e;max-width:580px;margin-bottom:40px;">AgentProof runs your agent through a set of behavioral contracts after every change and tells you exactly what regressed — before it reaches a real user.</p>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-      <a href="/dashboard" class="btn-dark">Open Dashboard</a>
-      <a href="#how-it-works" class="btn-outline">See how it works</a>
+<section style="padding:96px 0 80px; background:var(--bg);">
+  <div class="container-narrow">
+    <span class="badge" style="margin-bottom:28px; display:inline-flex;">UiPath AgentHack 2025</span>
+    <h1 style="font-size:54px; font-weight:800; line-height:1.1; letter-spacing:-2px; color:var(--ink); margin-bottom:22px;">
+      Did your last prompt<br>change break anything?
+    </h1>
+    <p style="font-size:18px; color:var(--ink-3); max-width:560px; line-height:1.7; margin-bottom:14px;">
+      You tweak the system prompt, swap the model, or clean up some wording. The agent still responds. But does it still <em>behave</em> the way it's supposed to?
+    </p>
+    <p style="font-size:18px; color:var(--ink-3); max-width:560px; line-height:1.7; margin-bottom:40px;">
+      AgentProof runs your agent through a set of behavioral contracts after every change and surfaces exactly what regressed — before it reaches a real user.
+    </p>
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <a href="/dashboard" class="btn btn-primary btn-lg">Open Dashboard</a>
+      <a href="#how-it-works" class="btn btn-secondary btn-lg">How it works</a>
     </div>
   </div>
 </section>
+
+<div class="divider"></div>
 
 <!-- DEMO -->
-<section id="demo" style="padding:80px 0;background:#fff;border-top:1px solid #e7e5e4;border-bottom:1px solid #e7e5e4;">
-  <div style="max-width:820px;margin:0 auto;padding:0 40px;">
-    <p style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#a8a29e;margin-bottom:12px;">Live example</p>
-    <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.5px;margin-bottom:10px;">The prompt got "warmer". The behavior broke.</h2>
-    <p style="font-size:15px;color:#78716c;margin-bottom:36px;">A ShopEasy refund agent was updated to sound more empathetic. Nobody noticed it stopped following 3 critical contracts.</p>
+<section id="demo" style="padding:80px 0; background:var(--bg-2);">
+  <div class="container-narrow">
+    <p style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.8px; color:var(--ink-4); margin-bottom:10px;">Live example</p>
+    <h2 style="font-size:32px; font-weight:700; letter-spacing:-0.8px; color:var(--ink); margin-bottom:10px;">The prompt got "warmer". The behavior broke.</h2>
+    <p style="font-size:15px; color:var(--ink-3); margin-bottom:36px; max-width:540px;">A ShopEasy refund agent was updated to sound more empathetic. Nobody noticed it stopped following 3 critical contracts.</p>
 
-    <div style="border:1px solid #e7e5e4;border-radius:10px;overflow:hidden;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;">
-        <div style="padding:24px 28px;border-right:1px solid #e7e5e4;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;">
-            <span style="width:8px;height:8px;background:#16a34a;border-radius:50%;display:inline-block;"></span>
-            <span style="font-size:12px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.8px;">V1 — All contracts pass</span>
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow);">
+      <div style="display:grid; grid-template-columns:1fr 1fr;">
+        <!-- V1 -->
+        <div style="padding:28px 32px; border-right:1px solid var(--border);">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:20px;">
+            <span style="width:7px; height:7px; background:var(--green); border-radius:50%; display:inline-block;"></span>
+            <span style="font-size:11px; font-weight:700; color:var(--green); text-transform:uppercase; letter-spacing:1px;">V1 — All contracts pass</span>
           </div>
-          <div style="display:flex;flex-direction:column;gap:11px;">
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:#16a34a;font-weight:700;margin-top:1px;">✓</span><span style="font-size:14px;color:#44403c;">Confirms customer is eligible for a refund</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:#16a34a;font-weight:700;margin-top:1px;">✓</span><span style="font-size:14px;color:#44403c;">Cites Return Policy Section 3.1 by name</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:#16a34a;font-weight:700;margin-top:1px;">✓</span><span style="font-size:14px;color:#44403c;">Handles the request directly — no handoff</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:#16a34a;font-weight:700;margin-top:1px;">✓</span><span style="font-size:14px;color:#44403c;">Response under 100 words</span></div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Confirms customer is eligible for a refund</span></div>
+            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Cites Return Policy Section 3.1 by name</span></div>
+            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Resolves the request directly, no handoff</span></div>
+            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Response under 100 words</span></div>
           </div>
         </div>
-        <div style="padding:24px 28px;background:#fffbf9;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;">
-            <span style="width:8px;height:8px;background:#dc2626;border-radius:50%;display:inline-block;"></span>
-            <span style="font-size:12px;font-weight:700;color:#b91c1c;text-transform:uppercase;letter-spacing:0.8px;">V2 — 3 regressions</span>
+        <!-- V2 -->
+        <div style="padding:28px 32px; background:#fffcfa;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:20px;">
+            <span style="width:7px; height:7px; background:var(--red); border-radius:50%; display:inline-block;"></span>
+            <span style="font-size:11px; font-weight:700; color:var(--red); text-transform:uppercase; letter-spacing:1px;">V2 — 3 regressions detected</span>
           </div>
-          <div style="display:flex;flex-direction:column;gap:11px;">
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:#dc2626;font-weight:700;margin-top:1px;">✗</span><span style="font-size:14px;color:#44403c;">No mention of refund eligibility</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:#dc2626;font-weight:700;margin-top:1px;">✗</span><span style="font-size:14px;color:#44403c;">Policy never referenced</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:#dc2626;font-weight:700;margin-top:1px;">✗</span><span style="font-size:14px;color:#44403c;">Tells the customer to contact support instead</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start;"><span style="color:#16a34a;font-weight:700;margin-top:1px;">✓</span><span style="font-size:14px;color:#44403c;">Still sounds warm and friendly</span></div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div style="display:flex; gap:10px;"><span class="fail">✗</span><span style="font-size:14px; color:var(--ink-2);">No mention of refund eligibility</span></div>
+            <div style="display:flex; gap:10px;"><span class="fail">✗</span><span style="font-size:14px; color:var(--ink-2);">Policy never referenced</span></div>
+            <div style="display:flex; gap:10px;"><span class="fail">✗</span><span style="font-size:14px; color:var(--ink-2);">Tells the customer to contact support instead</span></div>
+            <div style="display:flex; gap:10px;"><span class="pass">✓</span><span style="font-size:14px; color:var(--ink-2);">Still sounds warm and friendly</span></div>
           </div>
         </div>
       </div>
-      <div style="padding:14px 28px;background:#f5f5f4;border-top:1px solid #e7e5e4;display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-size:13px;color:#78716c;">AgentProof flagged this automatically. Drift score: <strong style="color:#c2410c;">75%</strong> — status: <strong style="color:#dc2626;">FAILED</strong></span>
-        <a href="/dashboard" style="font-size:13px;color:#f97316;font-weight:600;">View in dashboard →</a>
+      <div style="padding:14px 32px; background:var(--bg-2); border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-size:13px; color:var(--ink-3);">Drift score: <strong style="color:#c2410c;">75%</strong> &nbsp;·&nbsp; Status: <strong style="color:var(--red);">FAILED</strong></span>
+        <a href="/dashboard" style="font-size:13px; color:var(--orange); font-weight:600;">View full report →</a>
       </div>
     </div>
   </div>
 </section>
+
+<div class="divider"></div>
 
 <!-- HOW IT WORKS -->
-<section id="how-it-works" style="padding:80px 0;background:#fafaf9;">
-  <div style="max-width:820px;margin:0 auto;padding:0 40px;">
-    <p style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#a8a29e;margin-bottom:12px;">How it works</p>
-    <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.5px;margin-bottom:48px;">Three steps, no setup overhead</h2>
-    <div style="display:flex;flex-direction:column;gap:0;">
-      <div style="display:flex;gap:24px;padding-bottom:40px;border-bottom:1px solid #e7e5e4;">
-        <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#fff7ed;border:2px solid #fed7aa;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#f97316;">1</div>
-        <div style="padding-top:6px;">
-          <h3 style="font-size:17px;font-weight:700;margin-bottom:8px;color:#1c1917;">Write behavioral contracts</h3>
-          <p style="font-size:14px;color:#78716c;max-width:500px;">Define the rules your agent must follow — always cite this policy, never redirect to support for simple requests, respond in under 100 words. Plain language, stored in JSON test suites.</p>
+<section id="how-it-works" style="padding:80px 0; background:var(--bg);">
+  <div class="container-narrow">
+    <p style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.8px; color:var(--ink-4); margin-bottom:10px;">How it works</p>
+    <h2 style="font-size:32px; font-weight:700; letter-spacing:-0.8px; color:var(--ink); margin-bottom:52px;">Three steps, no setup overhead</h2>
+
+    <div style="display:flex; flex-direction:column; gap:40px;">
+      <div style="display:flex; gap:24px; align-items:flex-start;">
+        <div class="step-num">1</div>
+        <div>
+          <h3 style="font-size:17px; font-weight:700; color:var(--ink); margin-bottom:8px;">Write behavioral contracts</h3>
+          <p style="font-size:15px; color:var(--ink-3); max-width:520px; line-height:1.7;">Define the rules your agent must follow — always cite this policy, never redirect to support for simple requests, respond in under 100 words. Plain language, stored in JSON test suites alongside your code.</p>
         </div>
       </div>
-      <div style="display:flex;gap:24px;padding:40px 0;border-bottom:1px solid #e7e5e4;">
-        <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#fff7ed;border:2px solid #fed7aa;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#f97316;">2</div>
-        <div style="padding-top:6px;">
-          <h3 style="font-size:17px;font-weight:700;margin-bottom:8px;color:#1c1917;">Trigger from UiPath Orchestrator</h3>
-          <p style="font-size:14px;color:#78716c;max-width:500px;">Run AgentProof as a native coded agent — pass your agent's endpoint and test suite ID. It calls the agent with each test scenario, collects responses, and evaluates each one against every contract using an LLM judge.</p>
+      <div style="display:flex; gap:24px; align-items:flex-start;">
+        <div class="step-num">2</div>
+        <div>
+          <h3 style="font-size:17px; font-weight:700; color:var(--ink); margin-bottom:8px;">Trigger from UiPath Orchestrator</h3>
+          <p style="font-size:15px; color:var(--ink-3); max-width:520px; line-height:1.7;">Run AgentProof as a native coded agent — pass your agent's endpoint and test suite ID. It calls the agent with each scenario, collects every response, and runs each one through an LLM judge that evaluates it against every contract.</p>
         </div>
       </div>
-      <div style="display:flex;gap:24px;padding-top:40px;">
-        <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#fff7ed;border:2px solid #fed7aa;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#f97316;">3</div>
-        <div style="padding-top:6px;">
-          <h3 style="font-size:17px;font-weight:700;margin-bottom:8px;color:#1c1917;">See exactly what changed</h3>
-          <p style="font-size:14px;color:#78716c;max-width:500px;">Results are compared against the last passing baseline. You get a drift score, a list of regressions with reasoning, and a per-contract breakdown — stored in the dashboard for every run.</p>
+      <div style="display:flex; gap:24px; align-items:flex-start;">
+        <div class="step-num">3</div>
+        <div>
+          <h3 style="font-size:17px; font-weight:700; color:var(--ink); margin-bottom:8px;">See exactly what changed</h3>
+          <p style="font-size:15px; color:var(--ink-3); max-width:520px; line-height:1.7;">Results are compared to the last passing baseline. You get a drift %, a list of regressions with LLM reasoning, and a per-contract breakdown — every run persisted to the dashboard.</p>
         </div>
       </div>
     </div>
   </div>
 </section>
 
+<div class="divider"></div>
+
 <!-- CTA -->
-<section style="padding:80px 0;background:#1c1917;border-top:1px solid #292524;">
-  <div style="max-width:820px;margin:0 auto;padding:0 40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:24px;">
+<section style="padding:72px 0; background:var(--bg-dark);">
+  <div class="container-narrow" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:28px;">
     <div>
-      <h2 style="font-size:26px;font-weight:700;color:#fafaf9;margin-bottom:8px;">See it in action</h2>
-      <p style="font-size:15px;color:#a8a29e;">The dashboard has live results from the demo agent above.</p>
+      <h2 style="font-size:28px; font-weight:700; color:#fff; letter-spacing:-0.5px; margin-bottom:8px;">See it running live</h2>
+      <p style="font-size:15px; color:#78716c;">The dashboard shows real results from the demo above.</p>
     </div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-      <a href="/dashboard" style="display:inline-block;background:#f97316;color:#fff;padding:11px 24px;border-radius:7px;font-size:14px;font-weight:700;">Open Dashboard</a>
-      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" style="display:inline-block;background:transparent;color:#d6d3d1;padding:11px 24px;border-radius:7px;font-size:14px;font-weight:500;border:1.5px solid #44403c;">View Source</a>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a href="/dashboard" class="btn btn-orange btn-lg">Open Dashboard</a>
+      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" class="btn btn-lg" style="background:transparent; color:#a8a29e; border:1.5px solid #292524;">View Source</a>
     </div>
   </div>
 </section>
 
 <!-- FOOTER -->
-<footer style="background:#fff;border-top:1px solid #e7e5e4;padding:28px 40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-  <div style="display:flex;align-items:center;gap:8px;">
-    <div style="background:#f97316;color:#fff;border-radius:5px;padding:3px 8px;font-weight:800;font-size:12px;">AP</div>
-    <span style="font-size:13px;color:#a8a29e;">AgentProof · UiPath AgentHack 2025</span>
-  </div>
-  <div style="display:flex;gap:20px;">
-    <a href="/dashboard" style="font-size:13px;color:#a8a29e;">Dashboard</a>
-    <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" style="font-size:13px;color:#a8a29e;">GitHub</a>
-    <a href="/health" style="font-size:13px;color:#a8a29e;">API</a>
+<footer style="background:var(--bg); border-top:1px solid var(--border); padding:24px 0;">
+  <div class="container" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span class="nav-badge" style="font-size:12px; padding:2px 8px;">AP</span>
+      <span style="font-size:13px; color:var(--ink-4);">AgentProof &nbsp;·&nbsp; UiPath AgentHack 2025</span>
+    </div>
+    <div style="display:flex; gap:24px;">
+      <a href="/dashboard" style="font-size:13px; color:var(--ink-4);">Dashboard</a>
+      <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" style="font-size:13px; color:var(--ink-4);">GitHub</a>
+      <a href="/health" style="font-size:13px; color:var(--ink-4);">API Status</a>
+    </div>
   </div>
 </footer>
 
