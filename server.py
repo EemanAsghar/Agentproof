@@ -234,6 +234,55 @@ Keep it conversational and do not worry too much about policies."""
     </script>
     """
 
+    _REPORT_CSS = """
+      @keyframes cgrow { to { width:var(--w); } }
+      @keyframes cardin { to { opacity:1; transform:none; } }
+      .rpt { max-width:940px; margin:0 auto; padding:30px 40px 64px; }
+      .rhero { display:grid; grid-template-columns:172px 1fr; gap:30px; align-items:center;
+               background:linear-gradient(180deg,var(--bg2),#0c0c0e); border:1px solid var(--br);
+               border-radius:18px; padding:28px 32px; margin-bottom:14px; }
+      @media(max-width:720px){ .rhero{ grid-template-columns:1fr; text-align:center; } }
+      .rverd { display:flex; flex-direction:column; gap:13px; }
+      .rstatusline { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+      .rstatus { font-size:30px; font-weight:800; letter-spacing:-1px; }
+      .rdot { width:10px; height:10px; border-radius:50%; animation:glow 1.6s infinite; }
+      @keyframes glow { 0%,100%{opacity:1;} 50%{opacity:.5;} }
+      .rsub { font-size:14.5px; color:var(--t2); }
+      .rmeta { display:flex; gap:9px; flex-wrap:wrap; margin-top:3px; }
+      .chip { font-family:var(--mono); font-size:11.5px; color:var(--t2); background:var(--bg);
+              border:1px solid var(--br); border-radius:7px; padding:5px 11px; }
+      .chip b { color:var(--t1); font-weight:600; }
+      .seclbl { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:2px;
+                color:var(--t3); margin:30px 0 14px; }
+
+      .tcase { position:relative; background:var(--bg2); border:1px solid var(--br); border-left-width:3px;
+               border-radius:12px; overflow:hidden; margin-bottom:14px; opacity:0; transform:translateY(12px);
+               animation:cardin .5s ease forwards; }
+      .tchead { display:flex; align-items:center; gap:11px; padding:16px 20px 14px; }
+      .tcname { font-weight:600; font-size:15px; }
+      .tcsev { margin-left:auto; font-size:10px; color:var(--t3); text-transform:uppercase;
+               letter-spacing:1.4px; font-family:var(--mono); }
+      .tcbody { padding:0 20px 16px; }
+      .agent { display:flex; gap:11px; margin-bottom:16px; }
+      .avatar { width:26px; height:26px; border-radius:7px; background:var(--bg3); border:1px solid var(--br2);
+                display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800;
+                color:var(--t2); flex-shrink:0; font-family:var(--mono); }
+      .bubble { flex:1; background:var(--bg3); border:1px solid var(--br); border-radius:4px 12px 12px 12px;
+                padding:13px 16px; font-size:13.5px; color:var(--t2); line-height:1.65; }
+      .ev { display:flex; gap:12px; padding:13px 0; border-top:1px solid var(--br); }
+      .evic { width:20px; height:20px; border-radius:50%; flex-shrink:0; display:flex; align-items:center;
+              justify-content:center; font-size:11px; font-weight:800; margin-top:1px; }
+      .evic.ok { background:rgba(34,197,94,.14); color:var(--gr); }
+      .evic.fail { background:rgba(239,68,68,.14); color:var(--rd); }
+      .evbody { flex:1; }
+      .evcid { font-size:11.5px; font-family:var(--mono); color:var(--t3); margin-bottom:3px; }
+      .evreason { font-size:13.5px; color:var(--t1); line-height:1.5; }
+      .cmeter { display:flex; align-items:center; gap:11px; margin-top:9px; }
+      .cbar { height:4px; flex:1; max-width:200px; background:#1f1f23; border-radius:2px; overflow:hidden; }
+      .cbar i { display:block; height:100%; width:0; border-radius:2px; animation:cgrow 1.1s .25s cubic-bezier(.3,.85,.3,1) forwards; }
+      .evpct { font-size:11px; font-family:var(--mono); color:var(--t3); min-width:34px; }
+    """
+
     @app.get("/", response_class=HTMLResponse)
     async def landing():
         return HTMLResponse("""<!DOCTYPE html>
@@ -1497,51 +1546,83 @@ Keep it conversational and do not worry too much about policies."""
                 status_code=404,
             )
 
+        import math
         status = run["overall_status"]
         color = _status_color(status)
-        pill = {"PASSED": "sp-p", "DEGRADED": "sp-d", "FAILED": "sp-f"}.get(status, "")
-        drift = round((run["drift_score"] or 0) * 100, 1)
+        drift = round(float(run["drift_score"] or 0) * 100, 1)  # Postgres Decimal -> float
         ts = str(run["timestamp"])[:19].replace("T", " ")
         results = run["results"]
         if isinstance(results, str):
             results = json.loads(results)
+        results = results or []
         regressions = run["regressions"]
         if isinstance(regressions, str):
             regressions = json.loads(regressions)
         reg_count = len(regressions) if regressions else 0
 
+        t_total = len(results)
+        t_pass = sum(1 for r in results if r["overall_pass"])
+        t_fail = t_total - t_pass
+        n_contracts = sum(len(r.get("contract_evaluations", [])) for r in results)
+
+        verdict = {
+            "PASSED": "All behavioral contracts satisfied. Safe to deploy.",
+            "DEGRADED": "Behavioral drift detected. Review before deploying.",
+            "FAILED": "Critical regressions found. Deployment would be blocked.",
+        }.get(status, "")
+
+        # drift ring
+        _rs, _sw = 150, 12
+        _r = _rs / 2 - _sw
+        _circ = 2 * math.pi * _r
+        _off = _circ * (1 - min(drift, 100) / 100)
+        ring = (
+            f'<div class="ringbox" style="width:{_rs}px;height:{_rs}px;">'
+            f'<svg width="{_rs}" height="{_rs}" style="transform:rotate(-90deg);">'
+            f'<circle cx="{_rs/2}" cy="{_rs/2}" r="{_r}" fill="none" stroke="#1f1f23" stroke-width="{_sw}"/>'
+            f'<circle class="ringfill" cx="{_rs/2}" cy="{_rs/2}" r="{_r}" fill="none" stroke="{color}" '
+            f'stroke-width="{_sw}" stroke-linecap="round" stroke-dasharray="{_circ:.2f}" '
+            f'style="--c:{_circ:.2f};--off:{_off:.2f};"/>'
+            f'</svg>'
+            f'<div class="ringnum"><div class="rv" style="color:{color};">{drift}%</div><div class="rl">drift</div></div>'
+            f'</div>'
+        )
+
         test_cards = ""
-        for r in (results or []):
+        for i, r in enumerate(results):
             tc_color = "#22c55e" if r["overall_pass"] else "#ef4444"
             tc_label = "PASS" if r["overall_pass"] else "FAIL"
             tc_pill = "sp-p" if r["overall_pass"] else "sp-f"
             contracts_html = ""
             for ev in r.get("contract_evaluations", []):
-                ev_color = "#22c55e" if ev["passed"] else "#ef4444"
-                ev_icon = "✓" if ev["passed"] else "✗"
+                ev_pass = ev["passed"]
+                ev_cls = "ok" if ev_pass else "fail"
+                ev_icon = "✓" if ev_pass else "✗"
+                ev_col = "#22c55e" if ev_pass else "#ef4444"
+                conf = round(ev["confidence"] * 100)
                 contracts_html += (
-                    f'<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #1f1f23;">'
-                    f'<span style="color:{ev_color};font-weight:700;flex-shrink:0;">{ev_icon}</span>'
-                    f'<div style="flex:1;">'
-                    f'<div style="font-size:11.5px;color:#52525b;font-family:monospace;margin-bottom:2px;">{ev["contract_id"]}</div>'
-                    f'<div style="font-size:13px;color:#a1a1aa;line-height:1.5;">{ev["reasoning"]}</div>'
+                    f'<div class="ev">'
+                    f'<span class="evic {ev_cls}">{ev_icon}</span>'
+                    f'<div class="evbody">'
+                    f'<div class="evcid">contract · {ev["contract_id"]}</div>'
+                    f'<div class="evreason">{ev["reasoning"]}</div>'
+                    f'<div class="cmeter"><div class="cbar"><i style="--w:{conf}%;background:{ev_col};"></i></div>'
+                    f'<span class="evpct" style="color:{ev_col};">{conf}%</span></div>'
                     f'</div>'
-                    f'<span style="font-size:11px;color:#52525b;font-family:monospace;flex-shrink:0;">{round(ev["confidence"]*100)}%</span>'
                     f'</div>'
                 )
-            resp_preview = r["agent_response"][:280] + ("…" if len(r["agent_response"]) > 280 else "")
             test_cards += (
-                f'<div style="border:1px solid #1f1f23;border-radius:9px;padding:20px;margin-bottom:14px;background:#111113;">'
-                f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">'
+                f'<div class="tcase" style="border-left-color:{tc_color};animation-delay:{i*0.06:.2f}s;">'
+                f'<div class="tchead">'
                 f'<span class="sp {tc_pill}">{tc_label}</span>'
-                f'<span style="font-weight:600;font-size:14px;">{r["test_name"]}</span>'
-                f'<span style="margin-left:auto;font-size:10.5px;color:#52525b;text-transform:uppercase;letter-spacing:1px;font-family:monospace;">{r["severity"]}</span>'
+                f'<span class="tcname">{r["test_name"]}</span>'
+                f'<span class="tcsev">{r["severity"]}</span>'
                 f'</div>'
-                f'<div style="background:#18181b;border-radius:7px;padding:12px;margin-bottom:12px;">'
-                f'<div style="font-size:10.5px;color:#52525b;margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;">Agent Response</div>'
-                f'<div style="font-size:13px;color:#a1a1aa;line-height:1.6;">{resp_preview}</div>'
-                f'</div>'
+                f'<div class="tcbody">'
+                f'<div class="agent"><span class="avatar">AI</span>'
+                f'<div class="bubble">{r["agent_response"]}</div></div>'
                 f'{contracts_html}'
+                f'</div>'
                 f'</div>'
             )
 
@@ -1551,39 +1632,40 @@ Keep it conversational and do not worry too much about policies."""
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Run {run_id[:8]} — AgentProof</title>
-  <style>{_DARK_CSS}</style>
+  <style>{_DARK_CSS}{_DASH_CSS}{_REPORT_CSS}</style>
 </head>
 <body>
-<header style="background:var(--bg);border-bottom:1px solid var(--br);padding:0 40px;height:54px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:99;">
-  <a href="/dashboard" style="font-size:12.5px;color:var(--t3);padding:5px 10px;border:1px solid var(--br2);border-radius:5px;">← Dashboard</a>
+<header style="background:rgba(9,9,11,.78);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);padding:0 40px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:99;">
+  <a href="/dashboard" style="font-size:12.5px;color:var(--t3);padding:5px 11px;border:1px solid var(--br2);border-radius:6px;">← Dashboard</a>
   <span class="lm">AP</span>
   <span style="font-weight:700;font-size:15px;">AgentProof</span>
-  <span style="font-size:13px;color:var(--t3);">/ Run Detail</span>
+  <span style="font-size:13px;color:var(--t3);">/ Report</span>
   <span style="font-family:monospace;font-size:12px;color:var(--t3);margin-left:4px;">{run_id[:8]}…</span>
 </header>
-<main style="padding:32px 40px;max-width:960px;">
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--br);border:1px solid var(--br);border-radius:9px;overflow:hidden;margin-bottom:28px;">
-    <div style="background:var(--bg2);padding:18px 20px;">
-      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;">Status</div>
-      <span class="sp {pill}" style="font-size:14px;padding:3px 10px;">{status}</span>
-    </div>
-    <div style="background:var(--bg2);padding:18px 20px;">
-      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;">Drift Score</div>
-      <div style="font-size:20px;font-weight:700;color:{color};font-family:monospace;">{drift}%</div>
-    </div>
-    <div style="background:var(--bg2);padding:18px 20px;">
-      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;">Regressions</div>
-      <div style="font-size:20px;font-weight:700;color:{'#ef4444' if reg_count>0 else '#22c55e'};font-family:monospace;">{reg_count}</div>
-    </div>
-    <div style="background:var(--bg2);padding:18px 20px;">
-      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;">Suite</div>
-      <div style="font-size:14px;font-weight:600;font-family:monospace;">{run["suite_id"]}</div>
+
+<div class="rpt">
+  <div class="rhero">
+    {ring}
+    <div class="rverd">
+      <div class="rstatusline">
+        <span class="rdot" style="background:{color};box-shadow:0 0 12px {color};"></span>
+        <span class="rstatus" style="color:{color};">{status}</span>
+        <span style="font-size:11px;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;">validation report</span>
+      </div>
+      <div class="rsub">{verdict}</div>
+      <div class="rmeta">
+        <span class="chip">suite&nbsp; <b>{run["suite_id"]}</b></span>
+        <span class="chip">tests&nbsp; <b style="color:#22c55e;">{t_pass} pass</b> · <b style="color:#ef4444;">{t_fail} fail</b></span>
+        <span class="chip">contracts&nbsp; <b>{n_contracts}</b></span>
+        <span class="chip">regressions&nbsp; <b style="color:{'#ef4444' if reg_count else '#22c55e'};">{reg_count}</b></span>
+        <span class="chip">{ts} UTC</span>
+      </div>
     </div>
   </div>
-  <div style="font-size:11.5px;color:var(--t3);font-family:monospace;margin-bottom:24px;">{ts} UTC</div>
-  <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);margin-bottom:14px;">Test Cases</div>
+
+  <div class="seclbl">Test cases · {t_total}</div>
   {test_cards}
-</main>
+</div>
 </body>
 </html>""")
 
