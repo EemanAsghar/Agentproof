@@ -82,100 +82,98 @@ Keep it conversational and do not worry too much about policies."""
   <title>AgentProof</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:#0F172A;color:#CBD5E1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;line-height:1.6;}
+    body{background:#fff;color:#111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;line-height:1.6;}
     a{color:inherit;text-decoration:none;}
-    p{color:#94A3B8;}
   </style>
 </head>
 <body>
 
-<nav style="padding:20px 40px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1E293B;">
+<nav style="padding:18px 40px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e7eb;">
   <div style="display:flex;align-items:center;gap:10px;">
-    <div style="background:#7C3AED;border-radius:8px;padding:5px 11px;font-weight:700;font-size:15px;">AP</div>
-    <span style="font-weight:600;font-size:16px;color:#E2E8F0;">AgentProof</span>
+    <div style="background:#111;border-radius:6px;padding:4px 10px;font-weight:700;font-size:14px;color:#fff;">AP</div>
+    <span style="font-weight:600;font-size:15px;">AgentProof</span>
   </div>
   <div style="display:flex;gap:8px;">
-    <a href="/dashboard" style="padding:7px 16px;border-radius:6px;font-size:13px;border:1px solid #334155;color:#94A3B8;">Dashboard</a>
-    <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" style="padding:7px 16px;border-radius:6px;font-size:13px;border:1px solid #334155;color:#94A3B8;">GitHub</a>
+    <a href="/dashboard" style="padding:6px 14px;border-radius:6px;font-size:13px;border:1px solid #e5e7eb;color:#555;">Dashboard</a>
+    <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" style="padding:6px 14px;border-radius:6px;font-size:13px;border:1px solid #e5e7eb;color:#555;">GitHub</a>
   </div>
 </nav>
 
-<div style="max-width:720px;margin:80px auto;padding:0 40px;">
+<div style="max-width:680px;margin:72px auto;padding:0 40px;">
 
-  <p style="font-size:12px;color:#7C3AED;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:20px;">UiPath AgentHack 2025</p>
+  <p style="font-size:12px;color:#999;font-weight:500;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:18px;">UiPath AgentHack 2025</p>
 
-  <h1 style="font-size:42px;font-weight:700;color:#F1F5F9;letter-spacing:-1px;line-height:1.15;margin-bottom:24px;">
-    Did your last prompt change<br/>break anything?
+  <h1 style="font-size:38px;font-weight:700;color:#111;letter-spacing:-0.8px;line-height:1.2;margin-bottom:20px;">
+    Did your last prompt change break anything?
   </h1>
 
-  <p style="font-size:16px;margin-bottom:16px;">
-    You tweak the system prompt, swap the model, or clean up some wording. The agent still responds. But does it still behave the way it's supposed to?
+  <p style="font-size:15px;color:#555;margin-bottom:14px;">
+    You tweak the system prompt, swap the model, or clean up some wording. The agent still responds — but does it still <em>behave</em> the way it's supposed to?
+  </p>
+  <p style="font-size:15px;color:#555;margin-bottom:48px;">
+    AgentProof runs your agent through a set of behavioral contracts after every change and tells you exactly what regressed, before it reaches a real user.
   </p>
 
-  <p style="font-size:16px;margin-bottom:48px;">
-    AgentProof runs your AI agent through a set of behavioral contracts after every change and tells you exactly what regressed — before it reaches a real user.
-  </p>
-
-  <div style="border:1px solid #1E293B;border-radius:10px;overflow:hidden;margin-bottom:48px;">
-    <div style="padding:12px 16px;border-bottom:1px solid #1E293B;display:flex;gap:12px;align-items:center;">
-      <span style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:1px;">Demo — ShopEasy Refund Agent</span>
+  <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:48px;">
+    <div style="padding:10px 16px;border-bottom:1px solid #e5e7eb;background:#f9fafb;">
+      <span style="font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1px;">Demo — ShopEasy refund agent</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;">
-      <div style="padding:20px 24px;border-right:1px solid #1E293B;">
-        <div style="font-size:11px;font-weight:600;color:#10B981;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">V1 · Passes</div>
-        <div style="display:flex;flex-direction:column;gap:9px;">
-          <div style="font-size:13px;color:#94A3B8;"><span style="color:#10B981;margin-right:8px;">✓</span>Confirms refund eligibility</div>
-          <div style="font-size:13px;color:#94A3B8;"><span style="color:#10B981;margin-right:8px;">✓</span>Cites Return Policy §3.1</div>
-          <div style="font-size:13px;color:#94A3B8;"><span style="color:#10B981;margin-right:8px;">✓</span>Resolves the request directly</div>
-          <div style="font-size:13px;color:#94A3B8;"><span style="color:#10B981;margin-right:8px;">✓</span>Under 100 words</div>
+      <div style="padding:18px 20px;border-right:1px solid #e5e7eb;">
+        <div style="font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px;">V1 — passes</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:13px;color:#374151;"><span style="color:#16a34a;margin-right:8px;">✓</span>Confirms refund eligibility</div>
+          <div style="font-size:13px;color:#374151;"><span style="color:#16a34a;margin-right:8px;">✓</span>Cites Return Policy §3.1</div>
+          <div style="font-size:13px;color:#374151;"><span style="color:#16a34a;margin-right:8px;">✓</span>Resolves request directly</div>
+          <div style="font-size:13px;color:#374151;"><span style="color:#16a34a;margin-right:8px;">✓</span>Under 100 words</div>
         </div>
       </div>
-      <div style="padding:20px 24px;">
-        <div style="font-size:11px;font-weight:600;color:#F43F5E;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">V2 · Regresses</div>
-        <div style="display:flex;flex-direction:column;gap:9px;">
-          <div style="font-size:13px;color:#94A3B8;"><span style="color:#F43F5E;margin-right:8px;">✗</span>No mention of eligibility</div>
-          <div style="font-size:13px;color:#94A3B8;"><span style="color:#F43F5E;margin-right:8px;">✗</span>Policy never cited</div>
-          <div style="font-size:13px;color:#94A3B8;"><span style="color:#F43F5E;margin-right:8px;">✗</span>Tells customer to contact support</div>
-          <div style="font-size:13px;color:#94A3B8;"><span style="color:#10B981;margin-right:8px;">✓</span>Still sounds friendly</div>
+      <div style="padding:18px 20px;">
+        <div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px;">V2 — regresses</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:13px;color:#374151;"><span style="color:#dc2626;margin-right:8px;">✗</span>No mention of eligibility</div>
+          <div style="font-size:13px;color:#374151;"><span style="color:#dc2626;margin-right:8px;">✗</span>Policy never cited</div>
+          <div style="font-size:13px;color:#374151;"><span style="color:#dc2626;margin-right:8px;">✗</span>Tells customer to contact support</div>
+          <div style="font-size:13px;color:#374151;"><span style="color:#16a34a;margin-right:8px;">✓</span>Still sounds friendly</div>
         </div>
       </div>
     </div>
-    <div style="padding:12px 16px;border-top:1px solid #1E293B;background:#0B1120;">
-      <span style="font-size:12px;color:#64748B;">The prompt was changed to be "warmer". AgentProof caught 3 contract violations the team didn't notice.</span>
+    <div style="padding:10px 16px;border-top:1px solid #e5e7eb;background:#f9fafb;">
+      <span style="font-size:12px;color:#999;">The prompt was changed to sound "warmer". AgentProof caught 3 contract violations the team didn't notice.</span>
     </div>
   </div>
 
-  <div style="display:flex;flex-direction:column;gap:20px;margin-bottom:56px;">
-    <div style="display:flex;gap:16px;">
-      <span style="color:#7C3AED;font-weight:700;font-size:15px;min-width:24px;">1.</span>
+  <div style="display:flex;flex-direction:column;gap:18px;margin-bottom:52px;">
+    <div style="display:flex;gap:14px;">
+      <span style="font-weight:700;font-size:14px;color:#111;min-width:22px;">1.</span>
       <div>
-        <div style="font-size:14px;font-weight:600;color:#E2E8F0;margin-bottom:4px;">Write contracts</div>
-        <p style="font-size:13px;">Rules your agent must follow — cite this policy, never say that, always confirm X. Plain language, stored as JSON.</p>
+        <div style="font-size:14px;font-weight:600;color:#111;margin-bottom:3px;">Write contracts</div>
+        <p style="font-size:13px;color:#666;">Rules your agent must follow — cite this policy, never say that, always confirm X. Stored as JSON in the test suite.</p>
       </div>
     </div>
-    <div style="display:flex;gap:16px;">
-      <span style="color:#7C3AED;font-weight:700;font-size:15px;min-width:24px;">2.</span>
+    <div style="display:flex;gap:14px;">
+      <span style="font-weight:700;font-size:14px;color:#111;min-width:22px;">2.</span>
       <div>
-        <div style="font-size:14px;font-weight:600;color:#E2E8F0;margin-bottom:4px;">Run from UiPath Orchestrator</div>
-        <p style="font-size:13px;">Trigger AgentProof as a coded agent, passing your agent's endpoint and test suite ID. It calls the agent, collects responses, and runs each one through an LLM judge.</p>
+        <div style="font-size:14px;font-weight:600;color:#111;margin-bottom:3px;">Trigger from UiPath Orchestrator</div>
+        <p style="font-size:13px;color:#666;">Pass your agent's endpoint and suite ID. AgentProof calls the agent, collects every response, and runs each one through an LLM judge.</p>
       </div>
     </div>
-    <div style="display:flex;gap:16px;">
-      <span style="color:#7C3AED;font-weight:700;font-size:15px;min-width:24px;">3.</span>
+    <div style="display:flex;gap:14px;">
+      <span style="font-weight:700;font-size:14px;color:#111;min-width:22px;">3.</span>
       <div>
-        <div style="font-size:14px;font-weight:600;color:#E2E8F0;margin-bottom:4px;">See what changed</div>
-        <p style="font-size:13px;">Results are compared to the last passing baseline. You get a drift score, a list of exact regressions, and a per-contract breakdown.</p>
+        <div style="font-size:14px;font-weight:600;color:#111;margin-bottom:3px;">See what changed</div>
+        <p style="font-size:13px;color:#666;">Compared against the last passing run. You get a drift score, a regression list, and a per-contract breakdown in the dashboard.</p>
       </div>
     </div>
   </div>
 
-  <a href="/dashboard" style="display:inline-block;background:#7C3AED;color:#fff;padding:11px 24px;border-radius:7px;font-size:14px;font-weight:600;">Open Dashboard</a>
-  <span style="margin-left:16px;font-size:13px;color:#475569;">← runs from the live demo above</span>
+  <a href="/dashboard" style="display:inline-block;background:#111;color:#fff;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Open Dashboard</a>
+  <span style="margin-left:14px;font-size:13px;color:#aaa;">runs from the demo above</span>
 
 </div>
 
-<footer style="border-top:1px solid #1E293B;padding:24px 40px;margin-top:80px;">
-  <p style="font-size:13px;color:#334155;">AgentProof · UiPath AgentHack 2025 · <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" style="color:#475569;">github.com/EemanAsghar/Agentproof</a></p>
+<footer style="border-top:1px solid #e5e7eb;padding:20px 40px;margin-top:80px;">
+  <p style="font-size:13px;color:#bbb;">AgentProof · UiPath AgentHack 2025 · <a href="https://github.com/EemanAsghar/Agentproof" target="_blank" style="color:#999;">github.com/EemanAsghar/Agentproof</a></p>
 </footer>
 
 </body>
