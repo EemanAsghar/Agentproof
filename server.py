@@ -2,8 +2,8 @@ import os
 import json
 import traceback
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
 
 app = FastAPI(title="AgentProof")
 
@@ -32,6 +32,63 @@ try:
             base_url="https://openrouter.ai/api/v1",
             api_key=os.environ["OPENROUTER_API_KEY"],
         )
+
+    # ── Session: "Sign in with UiPath tenant" ─────────────────────────────────
+    # Identity = the org/tenant the user proved access to (their token returned 200
+    # from that tenant's Orchestrator). Cookie is HMAC-signed so it can't be forged;
+    # the signing key is derived from DATABASE_URL (a secret env var, not in the repo).
+    import hmac as _hmac
+    import hashlib as _hashlib
+    from urllib.parse import urlparse as _urlparse
+
+    SESSION_COOKIE = "ap_session"
+
+    def _session_key() -> bytes:
+        base = os.environ.get("SESSION_SECRET") or os.environ.get("DATABASE_URL") or "agentproof-dev-secret"
+        return _hashlib.sha256(base.encode()).digest()
+
+    def _sign_tenant(tenant: str) -> str:
+        sig = _hmac.new(_session_key(), tenant.encode(), _hashlib.sha256).hexdigest()[:32]
+        return f"{tenant}|{sig}"
+
+    def _read_tenant(request: Request) -> str | None:
+        raw = request.cookies.get(SESSION_COOKIE)
+        if not raw or "|" not in raw:
+            return None
+        tenant, sig = raw.rsplit("|", 1)
+        expect = _hmac.new(_session_key(), tenant.encode(), _hashlib.sha256).hexdigest()[:32]
+        return tenant if _hmac.compare_digest(sig, expect) else None
+
+    def _tenant_from_base_url(base_url: str) -> str:
+        p = _urlparse((base_url or "").strip().rstrip("/"))
+        parts = [x for x in p.path.split("/") if x]
+        return "/".join(parts[:2]) if parts else (p.netloc or "tenant")
+
+    def _signin_gate() -> str:
+        return """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="icon" type="image/png" href="/logo.png"/>
+<title>Sign in — AgentProof</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#09090b;color:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .card{max-width:440px;text-align:center;background:#111113;border:1px solid #1f1f23;border-radius:18px;padding:44px 38px;}
+  .logo{width:54px;height:54px;border-radius:12px;margin:0 auto 20px;display:block;}
+  h1{font-size:24px;font-weight:800;letter-spacing:-1px;margin-bottom:10px;}
+  p{font-size:15px;color:#a1a1aa;line-height:1.6;margin-bottom:26px;}
+  .btn{display:inline-flex;align-items:center;gap:9px;background:#f97316;color:#fff;font-size:15px;font-weight:700;padding:13px 26px;border-radius:9px;text-decoration:none;}
+  .btn:hover{background:#ea6c00;}
+  .home{display:block;margin-top:18px;font-size:13px;color:#52525b;text-decoration:none;}
+  .home:hover{color:#a1a1aa;}
+</style></head><body>
+  <div class="card">
+    <img src="/logo.png" class="logo" alt="AgentProof"/>
+    <h1>Sign in to your dashboard</h1>
+    <p>AgentProof scopes runs to your UiPath tenant. Connect your Orchestrator to see the validations for <strong>your</strong> agents.</p>
+    <a href="/test" class="btn">Connect UiPath tenant →</a>
+    <a href="/" class="home">← Back to home</a>
+  </div>
+</body></html>"""
 
     PROMPT_V1 = """You are a customer support agent for ShopEasy, an e-commerce company.
 
@@ -368,7 +425,7 @@ Don't ask about credit score, income, identity verification, or lending policy �
         agent_endpoint: str | None = None
 
     @app.post("/api/save-run")
-    async def save_byo_run(req: SaveByoReq):
+    async def save_byo_run(req: SaveByoReq, request: Request):
         """Persist a bring-your-own-agent run so it appears on the dashboard."""
         try:
             from agentproof.contracts import TestResult, ContractEvaluation
@@ -394,7 +451,7 @@ Don't ask about credit score, income, identity verification, or lending policy �
             run_id = save_run(
                 suite_id=req.suite_id, results=results,
                 drift_score=score, status=status, regressions=regressions,
-                agent_endpoint=req.agent_endpoint)
+                agent_endpoint=req.agent_endpoint, tenant_id=_read_tenant(request))
             return {"ok": True, "run_id": run_id, "status": status, "score": score}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -446,7 +503,7 @@ Don't ask about credit score, income, identity verification, or lending policy �
         return agents, rr.status_code
 
     @app.post("/api/uipath/agents")
-    async def uipath_agents(req: UiPathConnectReq):
+    async def uipath_agents(req: UiPathConnectReq, response: Response):
         """List published agents (Orchestrator Releases) across the user's folders."""
         import httpx
         base = req.base_url.strip().rstrip("/")
@@ -494,7 +551,13 @@ Don't ask about credit score, income, identity verification, or lending policy �
                         seen.add(a["key"]); agents.append(a)
 
                 if agents:
-                    return {"ok": True, "agents": agents, "folders": len(folders)}
+                    # Successful tenant verification → sign the user in (scoped session)
+                    tenant = _tenant_from_base_url(base)
+                    response.set_cookie(
+                        SESSION_COOKIE, _sign_tenant(tenant),
+                        max_age=7 * 24 * 3600, httponly=True, samesite="lax", secure=True,
+                    )
+                    return {"ok": True, "agents": agents, "folders": len(folders), "tenant": tenant}
 
                 # 4) helpful diagnostics when nothing came back
                 if not folders:
@@ -1994,6 +2057,9 @@ Don't ask about credit score, income, identity verification, or lending policy �
       window._uipAgents = agents;
       $('uipCount').textContent = '· '+agents.length+' discovered live';
       $('uipPicker').classList.remove('hidden');
+      if(j.tenant){
+        $('uipConnErr').innerHTML = '<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.28);color:#86efac;font-size:13px;padding:10px 13px;border-radius:9px;margin-top:12px;">✓ Signed in as <b>'+j.tenant+'</b> · <a href="/dashboard" style="color:#86efac;text-decoration:underline;">your dashboard →</a></div>';
+      }
       applyAgent(0);
       sel.onchange = function(){ applyAgent(parseInt(sel.value,10)); };
     }catch(e){ err('uipConnErr', String(e)); }
@@ -2205,11 +2271,20 @@ Don't ask about credit score, income, identity verification, or lending policy �
 </body>
 </html>""")
 
+    @app.get("/logout")
+    async def logout():
+        resp = RedirectResponse(url="/test", status_code=303)
+        resp.delete_cookie(SESSION_COOKIE)
+        return resp
+
     @app.get("/dashboard", response_class=HTMLResponse)
-    async def dashboard():
+    async def dashboard(request: Request):
+        tenant = _read_tenant(request)
+        if not tenant:
+            return HTMLResponse(_signin_gate())
         try:
-            from agentproof.db import get_all_runs
-            runs = list(get_all_runs())
+            from agentproof.db import get_runs_for_tenant
+            runs = list(get_runs_for_tenant(tenant))
             error = None
         except Exception as e:
             runs = []
@@ -2329,7 +2404,11 @@ Don't ask about credit score, income, identity verification, or lending policy �
       <span style="font-size:13px;color:var(--t3);margin-left:2px;">/ Console</span>
     </div>
   </div>
-  <a href="/live" style="font-size:12.5px;font-weight:600;color:#f97316;padding:6px 13px;border:1px solid rgba(249,115,22,.3);border-radius:6px;">▶ Live demo</a>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <span style="font-size:12px;font-family:var(--mono);color:var(--t2);display:flex;align-items:center;gap:7px;"><span style="width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;"></span>{tenant}</span>
+    <a href="/logout" style="font-size:12.5px;color:var(--t3);padding:5px 11px;border:1px solid var(--br2);border-radius:6px;">Sign out</a>
+    <a href="/live" style="font-size:12.5px;font-weight:600;color:#f97316;padding:6px 13px;border:1px solid rgba(249,115,22,.3);border-radius:6px;">▶ Live demo</a>
+  </div>
 </header>
 
 <div class="console">
@@ -2384,7 +2463,10 @@ Don't ask about credit score, income, identity verification, or lending policy �
 </html>""")
 
     @app.get("/run/{run_id}", response_class=HTMLResponse)
-    async def run_detail(run_id: str):
+    async def run_detail(run_id: str, request: Request):
+        tenant = _read_tenant(request)
+        if not tenant:
+            return HTMLResponse(_signin_gate())
         try:
             from agentproof.db import get_run_by_id
             run = get_run_by_id(run_id)
@@ -2394,7 +2476,8 @@ Don't ask about credit score, income, identity verification, or lending policy �
                 status_code=500,
             )
 
-        if not run:
+        # Scope: a run is only visible to the tenant that created it.
+        if not run or (run.get("tenant_id") and run.get("tenant_id") != tenant):
             return HTMLResponse(
                 "<body style='background:#09090b;color:#a1a1aa;padding:40px;font-family:monospace;'>Run not found.</body>",
                 status_code=404,

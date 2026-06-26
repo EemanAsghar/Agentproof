@@ -21,6 +21,7 @@ def save_run(
     status: str,
     regressions: list,
     agent_endpoint: str | None = None,
+    tenant_id: str | None = None,
 ) -> str:
     run_id = str(uuid.uuid4())
 
@@ -29,8 +30,8 @@ def save_run(
             cur.execute(
                 """
                 INSERT INTO test_runs
-                    (id, suite_id, timestamp, overall_status, drift_score, regressions, results, agent_endpoint)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (id, suite_id, timestamp, overall_status, drift_score, regressions, results, agent_endpoint, tenant_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     run_id,
@@ -41,6 +42,7 @@ def save_run(
                     json.dumps(regressions),
                     json.dumps([r.model_dump() for r in results]),
                     agent_endpoint,
+                    tenant_id,
                 ),
             )
         conn.commit()
@@ -92,11 +94,28 @@ def get_all_runs() -> list:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions, agent_endpoint
+                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions, agent_endpoint, tenant_id
                 FROM test_runs
                 ORDER BY timestamp DESC
                 LIMIT 50
                 """
+            )
+            return cur.fetchall()
+
+
+def get_runs_for_tenant(tenant_id: str) -> list:
+    """Runs belonging to a specific UiPath tenant (per-user dashboard scoping)."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions, agent_endpoint, tenant_id
+                FROM test_runs
+                WHERE tenant_id = %s
+                ORDER BY timestamp DESC
+                LIMIT 50
+                """,
+                (tenant_id,),
             )
             return cur.fetchall()
 
@@ -106,7 +125,7 @@ def get_run_by_id(run_id: str) -> dict | None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions, results, agent_endpoint
+                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions, results, agent_endpoint, tenant_id
                 FROM test_runs
                 WHERE id = %s
                 """,
