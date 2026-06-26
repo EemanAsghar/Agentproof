@@ -1,99 +1,120 @@
+<div align="center">
+
+<img src="Agentproof%20logo.png" width="110" alt="AgentProof logo"/>
+
 # AgentProof
 
-**The deployment gate for enterprise AI agents.**
-*Continuous behavioral validation & regression detection for agents — built on the UiPath Platform.*
+### The deployment gate for enterprise AI agents.
 
-> **UiPath AgentHack 2026 — Track 3: UiPath Test Cloud**
-> *Agentic software testing for AI-driven automations.*
+**Your agent still replies after a prompt change — but does it still *behave*?**
+AgentProof validates AI agents against behavioral contracts, catches regressions, and blocks unsafe deployments — running natively on the UiPath Platform.
 
-🔗 **Live app:** https://agentproof-opal.vercel.app
-🎥 **Demo video:** _(add YouTube/Vimeo link)_
-📊 **Deck:** _(add link)_
+[![Live App](https://img.shields.io/badge/▶_Live_App-agentproof--opal.vercel.app-f97316?style=for-the-badge)](https://agentproof-opal.vercel.app)
+
+`UiPath AgentHack 2026` · `Track 3 — UiPath Test Cloud` · `License: MIT` · `Built with Claude Code 🤖`
+
+🔗 **[Live app](https://agentproof-opal.vercel.app)**  ·  🎥 **[Demo video](#)** _(add link)_  ·  📊 **[Deck](#)** _(add link)_
+
+</div>
 
 ---
 
-## The problem
+## ⚡ The 30-second story
+
+> A developer makes the support agent "friendlier." **It still answers every question** — so nothing looks broken. In production, it has quietly stopped citing policy, started redirecting simple refunds to a human, and begun running long.
+>
+> **AgentProof catches it before it ships.** It runs the agent as a real UiPath job, scores its behavior against contracts, sees 3 critical regressions, and **blocks the deployment.** The developer reverts one line, re-validates → green → ships safely.
+
+That's the whole product: **CI for agent behavior.**
+
+---
+
+## 🔥 The problem
 
 Software teams have CI, unit tests, and deployment gates. **AI agent teams have a prompt and hope.**
 
-A one-line change to a system prompt, a model upgrade, an MCP/tool update, or a knowledge-base refresh can *silently* change an agent's behavior. The agent still replies — so nothing looks broken — but it may have stopped citing policy, started leaking data, or begun escalating things it should resolve. There is no "test suite" that catches behavioral regressions before they reach a customer.
-
-**AgentProof is the missing quality layer:** it validates an agent against behavioral contracts on every change, detects regressions against the last known-good baseline, and produces a deployment recommendation — so a UiPath agent can be gated *before* it ships.
+A one-line prompt edit, a model upgrade, a tool/MCP change, or a knowledge-base refresh can *silently* change what an agent does. The agent keeps replying, so humans don't notice — until a customer does. There is no test suite for **behavior**.
 
 ---
 
-## What it does
+## ✅ What it does
 
-1. **Connect** — Sign in with your UiPath tenant. AgentProof discovers the agents published in your Orchestrator.
-2. **Describe** — Say what an agent *should* do in plain English. An LLM authors **behavioral contracts** (no JSON, no config).
-3. **Validate** — AgentProof runs each test scenario against the agent — **natively as a real UiPath Orchestrator job**, or against an HTTP endpoint — and uses an **LLM-as-judge** to score every contract (pass/fail + confidence + reasoning).
-4. **Detect drift** — Results are compared to the last passing baseline. A **severity-weighted drift score** (critical ×3, high ×2, medium ×1, low ×0.5) produces a status: `PASSED` / `DEGRADED` / `FAILED`.
-5. **Gate the deployment** — `FAILED` ⇒ deployment blocked, regressions listed with LLM reasoning, alert fired, PDF report generated, results persisted to a per-tenant dashboard.
-
-The result is a single sentence every enterprise wants to be true:
-**"Every agent passes through AgentProof before it ships."**
+| | |
+|---|---|
+| **1. Connect** | Sign in with your UiPath tenant. AgentProof discovers the agents published in your Orchestrator. |
+| **2. Describe** | Say what an agent *should* do in plain English — an LLM writes the **behavioral contracts**. No JSON, no config. |
+| **3. Validate** | Run each scenario against the agent — **natively, as a real UiPath Orchestrator job** — and an **LLM-as-judge** scores every contract (pass / fail + confidence + reasoning). |
+| **4. Detect drift** | Diff against the last passing baseline. A **severity-weighted drift score** → `PASSED` / `DEGRADED` / `FAILED`. |
+| **5. Gate** | On `FAILED`: deployment blocked, regressions listed with reasoning, alert fired, PDF report generated, run saved to your per-tenant dashboard. |
 
 ---
 
-## How it runs on the UiPath Platform
+## 🟠 What makes it *native* to UiPath
 
-UiPath is the **execution and orchestration layer**; the web app is the control panel.
+Most "agent testing" tools call an HTTP endpoint. **AgentProof actually runs your agent on the platform:**
 
 ```
-Developer / Orchestrator trigger
-        │
-        ▼
-┌──────────────────────────────────────────────┐
-│  AgentProof — UiPath coded agent (published)  │   ← runs on UiPath Automation Cloud
-│  LangGraph pipeline (main.py):                │
-│   load_suite → run_tests → detect_regressions │
-│   → save_results → generate_report → notify   │
-└──────────────────────────────────────────────┘
-        │ discovers / targets
-        ▼
-   Agents published in your UiPath Orchestrator
-   (ShopEasy Support, Invoice, IT Helpdesk, HR, Loan …)
-        │ verdicts + drift
-        ▼
-   Per-tenant dashboard + PDF report + alert
+Connect tenant ──► discover published agents ──► START a real Orchestrator job
+                                                        │  (StartJobs)
+                                                        ▼
+                                              agent executes on UiPath
+                                              Automation Cloud (reads its
+                                              API key from a UiPath Asset)
+                                                        │  poll → OutputArguments
+                                                        ▼
+                                     LLM-as-judge scores the agent's real output
+                                                        │
+                                                        ▼
+                                   drift score → PASS / FAIL → deployment gate
 ```
 
-### UiPath components used
+> ✅ **Verified live:** ShopEasy & IT Helpdesk agents ran as Orchestrator jobs (`Successful`) and were judged on their actual output. Five demo agents are published to a real tenant and validate end to end.
+
+---
+
+## 🧩 UiPath platform usage
+
 | Component | How AgentProof uses it |
 |---|---|
-| **UiPath for Coding Agents (Claude Code)** | The entire solution — agent, engine, UI, integration — was built using Claude Code as the coding agent. *(Bonus-point criterion.)* |
-| **UiPath Coded Agents (Python SDK)** | AgentProof's validation engine (`main.py`) is a coded agent built with the UiPath Python SDK + LangGraph, packaged with `uipath pack` and published to Orchestrator. |
-| **UiPath Orchestrator** | Agents are published as packages/releases; AgentProof authenticates to the tenant, **discovers published agents**, and **executes them as real Orchestrator jobs** — it starts a job (`StartJobs`), polls it to completion, and reads the agent's output from `OutputArguments` to validate it. Sign-in identity = the UiPath tenant. |
-| **UiPath Assets** | Published agents read their runtime secret (`OPENROUTER_API_KEY`) from a UiPath Orchestrator **Asset**, so jobs run on Automation Cloud without secrets in the package. |
-| **UiPath Automation Cloud** | The coded agent runs on Automation Cloud; the tenant is the unit of identity and isolation. |
-| **External frameworks (encouraged)** | LangGraph (pipeline orchestration), OpenAI/OpenRouter (LLM-as-judge: `gpt-4o-mini`). UiPath remains the orchestration/governance layer. |
-
-### Built with coding agents
-This project was built **with Claude Code via UiPath for Coding Agents** — from the LangGraph engine and the published coded agents to the live dashboard, the tenant integration, and per-tenant auth. The demo video shows Claude Code building parts of the solution (Platform-Usage bonus).
+| **UiPath for Coding Agents (Claude Code)** | The **entire** solution — coded agent, engine, UI, tenant integration — was built with Claude Code. *(Bonus criterion.)* |
+| **UiPath Coded Agents (Python SDK)** | The validation engine (`main.py`) is a coded agent (LangGraph pipeline), packed with `uipath pack` and published to Orchestrator. |
+| **UiPath Orchestrator** | Discovers published agents, **starts agents as jobs (`StartJobs`)**, polls them, and reads output from `OutputArguments`. |
+| **UiPath Assets** | Agents read their runtime secret from an Orchestrator **Asset** — no secrets in the package. |
+| **UiPath Automation Cloud** | Agents execute on Automation Cloud; the **tenant is the unit of identity & isolation** (sign-in = your UiPath tenant). |
+| **External frameworks** *(encouraged)* | LangGraph (pipeline), OpenAI `gpt-4o-mini` via OpenRouter (LLM judge). UiPath stays the orchestration & governance layer. |
 
 ---
 
-## Quick start
+## 🤖 Built with UiPath for Coding Agents
 
-### Prerequisites
-- Python 3.12+ and [`uv`](https://github.com/astral-sh/uv) (or pip)
-- An OpenRouter API key (LLM judge) — `OPENROUTER_API_KEY`
-- A Neon (or any) PostgreSQL database — `DATABASE_URL`
-- A UiPath Automation Cloud tenant (to publish/discover agents)
+Every layer of AgentProof — the LangGraph engine, the five published coded agents, the Orchestrator REST integration, native job execution, per-tenant auth, and the dashboard — was built using **Claude Code via UiPath for Coding Agents**. The demo video shows it in action.
 
-### 1. Install
+---
+
+## 🚀 Quick start
+
+**Prerequisites:** Python 3.12+, `uv`, an `OPENROUTER_API_KEY`, a PostgreSQL `DATABASE_URL`, and a UiPath Automation Cloud tenant.
+
 ```bash
-uv venv && source .venv/bin/activate
-uv pip install -e .
+# 1. Install
+uv venv && source .venv/bin/activate && uv pip install -e .
+
+# 2. Configure
+cp .env.example .env        # set OPENROUTER_API_KEY and DATABASE_URL
+
+# 3. Run the validator as a coded agent (locally or on UiPath)
+uv run uipath run agent '{"suite_id":"aria_customer_support","agent_endpoint":"https://agentproof-opal.vercel.app/v1/chat"}'   # baseline → PASSED
+uv run uipath run agent '{"suite_id":"aria_customer_support","agent_endpoint":"https://agentproof-opal.vercel.app/v2/chat"}'   # regressed → FAILED
+
+# 4. Publish to Orchestrator
+uipath auth && uipath pack && uipath publish --tenant
 ```
 
-### 2. Configure
-```bash
-cp .env.example .env
-# set OPENROUTER_API_KEY and DATABASE_URL
-```
+**Or just open the live app** → [agentproof-opal.vercel.app/test](https://agentproof-opal.vercel.app/test) → **Connect UiPath tenant** → pick an agent → **Validate**.
 
-### 3. Create the runs table
+<details>
+<summary><strong>Database schema</strong></summary>
+
 ```sql
 CREATE TABLE test_runs (
     id             TEXT PRIMARY KEY,
@@ -108,65 +129,45 @@ CREATE TABLE test_runs (
 );
 CREATE INDEX idx_test_runs_tenant ON test_runs (tenant_id, timestamp DESC);
 ```
-
-### 4. Run the validator as a coded agent (locally or on UiPath)
-```bash
-# Establish a baseline (passing build)
-uv run uipath run agent '{"suite_id":"aria_customer_support","agent_endpoint":"https://agentproof-opal.vercel.app/v1/chat"}'
-# Detect regressions (regressed build)
-uv run uipath run agent '{"suite_id":"aria_customer_support","agent_endpoint":"https://agentproof-opal.vercel.app/v2/chat"}'
-```
-
-### 5. Publish to UiPath Orchestrator
-```bash
-uipath auth
-uipath pack
-uipath publish --tenant
-```
-
-### 6. Control panel
-Open the "Test your agent" flow at `https://agentproof-opal.vercel.app/test`, **Connect UiPath tenant**, and validate any discovered agent.
+</details>
 
 ---
 
-## Behavioral contracts
+## 📜 Behavioral contracts
 
-A behavioral contract is a typed rule the agent's response must satisfy — evaluated by an LLM-as-judge, so it works on probabilistic output (unlike `assertEqual`).
+A contract is a typed rule the agent's response must satisfy — judged by an LLM, so it works on probabilistic output (unlike `assertEqual`).
 
-| Type | Checks |
-|---|---|
-| `contains_intent` | Response expresses the specified intent |
-| `does_not_contain` | Response avoids the specified content |
-| `sentiment` | Response has the specified tone |
-| `response_length` | Word count under the limit |
-| `format_compliance` | Response follows the specified format |
-| `safety` | No harmful / disallowed content |
+`contains_intent` · `does_not_contain` · `sentiment` · `response_length` · `format_compliance` · `safety`
 
-Each test case has a severity (critical / high / medium / low) that weights the drift score.
+Each test case carries a severity (**critical ×3 · high ×2 · medium ×1 · low ×0.5**) that weights the drift score: `PASSED` < 5% · `DEGRADED` 5–15% · `FAILED` > 15%.
 
 ---
 
-## Repository structure
+## 🗂️ Architecture
+
 ```
-main.py                     # AgentProof coded agent — LangGraph pipeline (UiPath entry point)
+main.py                  AgentProof coded agent — LangGraph pipeline (UiPath entry point)
+                         load_suite → run_tests → detect_regressions → save → report → notify
 agentproof/
-  contracts.py              # Pydantic models (contracts, test cases, results)
-  runner.py                 # Calls the target agent
-  validator.py              # LLM-as-judge (OpenAI gpt-4o-mini via OpenRouter)
-  regression.py             # Severity-weighted drift score + baseline comparison
-  reporter.py               # PDF report (Jinja2 + WeasyPrint)
-  db.py                     # PostgreSQL persistence (per-tenant)
-server.py                   # Control panel: landing, /live demo, /test onboarding,
-                            #   per-tenant dashboard, reports, agent endpoints, UiPath REST integration
-shopease_support_agent/     # Demo target agent — published UiPath coded agent
-target_agents/              # 4 more published UiPath coded agents (invoice, IT, HR, loan)
-test_suites/                # Behavioral test suites (JSON)
-templates/report.html       # PDF report template
+  contracts.py           Pydantic models (contracts, cases, results)
+  runner.py              Calls the target agent
+  validator.py           LLM-as-judge (gpt-4o-mini via OpenRouter)
+  regression.py          Severity-weighted drift + baseline comparison
+  reporter.py            PDF report (Jinja2 + WeasyPrint)
+  db.py                  PostgreSQL persistence (per-tenant)
+server.py                Control panel: landing, /live cinematic demo, /test onboarding,
+                         per-tenant dashboard, reports, UiPath discovery + native job execution
+shopease_support_agent/  Demo target agent — published UiPath coded agent
+target_agents/           4 more published agents (invoice, IT, HR, loan)
+test_suites/             Behavioral test suites (JSON)
 ```
 
 ---
 
-## License
-MIT — see [LICENSE](LICENSE).
+<div align="center">
 
-*Built with Claude Code via UiPath for Coding Agents · UiPath AgentHack 2026 · Track 3: UiPath Test Cloud · by Eeman Asghar*
+**AgentProof** — *every agent passes through the gate before it ships.*
+
+MIT licensed · Built with Claude Code via UiPath for Coding Agents · UiPath AgentHack 2026 · Track 3: UiPath Test Cloud
+
+</div>
