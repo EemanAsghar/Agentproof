@@ -120,6 +120,7 @@ def save_results(state: AgentProofState) -> AgentProofState:
         drift_score=state["drift_score"],
         status=state["status"],
         regressions=state["regressions"],
+        agent_endpoint=state.get("agent_endpoint"),
     )
     state["run_id"] = run_id
     print(f"[save_results] Run saved: {run_id}")

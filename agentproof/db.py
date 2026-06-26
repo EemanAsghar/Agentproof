@@ -20,6 +20,7 @@ def save_run(
     drift_score: float,
     status: str,
     regressions: list,
+    agent_endpoint: str | None = None,
 ) -> str:
     run_id = str(uuid.uuid4())
 
@@ -28,8 +29,8 @@ def save_run(
             cur.execute(
                 """
                 INSERT INTO test_runs
-                    (id, suite_id, timestamp, overall_status, drift_score, regressions, results)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    (id, suite_id, timestamp, overall_status, drift_score, regressions, results, agent_endpoint)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     run_id,
@@ -39,6 +40,7 @@ def save_run(
                     drift_score,
                     json.dumps(regressions),
                     json.dumps([r.model_dump() for r in results]),
+                    agent_endpoint,
                 ),
             )
         conn.commit()
@@ -90,7 +92,7 @@ def get_all_runs() -> list:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions
+                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions, agent_endpoint
                 FROM test_runs
                 ORDER BY timestamp DESC
                 LIMIT 50
@@ -104,7 +106,7 @@ def get_run_by_id(run_id: str) -> dict | None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions, results
+                SELECT id, suite_id, timestamp, overall_status, drift_score, regressions, results, agent_endpoint
                 FROM test_runs
                 WHERE id = %s
                 """,

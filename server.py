@@ -365,6 +365,7 @@ Don't ask about credit score, income, identity verification, or lending policy â
     class SaveByoReq(BaseModel):
         suite_id: str
         results: list[dict]
+        agent_endpoint: str | None = None
 
     @app.post("/api/save-run")
     async def save_byo_run(req: SaveByoReq):
@@ -392,7 +393,8 @@ Don't ask about credit score, income, identity verification, or lending policy â
             _, regressions = compute_drift_score(results, baseline)
             run_id = save_run(
                 suite_id=req.suite_id, results=results,
-                drift_score=score, status=status, regressions=regressions)
+                drift_score=score, status=status, regressions=regressions,
+                agent_endpoint=req.agent_endpoint)
             return {"ok": True, "run_id": run_id, "status": status, "score": score}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -2098,6 +2100,7 @@ Don't ask about credit score, income, identity verification, or lending policy â
     $('step3').scrollIntoView({behavior:'smooth',block:'start'});
 
     var inp = getInputs();
+    window._lastEndpoint = inp.endpoint;
     var payloadBase = { endpoint:inp.endpoint, auth_header:inp.auth, input_field:inp.field };
 
     for(var i=0;i<suite.length;i++){
@@ -2192,7 +2195,7 @@ Don't ask about credit score, income, identity verification, or lending policy â
     var b=$('saveBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span> Savingâ€¦';
     try{
       var r = await fetch('/api/save-run',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({suite_id:suiteId, results:results})});
+        body:JSON.stringify({suite_id:suiteId, results:results, agent_endpoint:window._lastEndpoint||null})});
       var j = await r.json();
       if(j.ok){ $('saveMsg').innerHTML='<div class="muted" style="margin-top:10px;color:#86efac">âœ“ Saved Â· status '+j.status+' Â· <a href="/dashboard" style="color:#f97316">view on dashboard â†’</a></div>'; b.innerHTML='Saved âœ“'; }
       else { $('saveMsg').innerHTML='<div class="err">'+(j.error||'save failed')+'</div>'; b.disabled=false; b.innerHTML='Save to dashboard'; }
@@ -2275,10 +2278,17 @@ Don't ask about credit score, income, identity verification, or lending policy â
             reg_count = len(regressions) if regressions else 0
             ts = str(r["timestamp"])[:19].replace("T", " ")
             reg_color = "#ef4444" if reg_count > 0 else "#22c55e"
+            endpoint = r.get("agent_endpoint") or ""
+            ep_short = endpoint.replace("https://", "").replace("http://", "") if endpoint else "â€”"
+            ep_cell = (
+                f'<span style="color:#a1a1aa;">{ep_short}</span>' if endpoint
+                else '<span style="color:#3f3f46;">â€”</span>'
+            )
             rows += (
                 f'<tr class="runrow" onclick="window.location=\'/run/{r["id"]}\'">'
                 f'<td style="padding:13px 18px;color:#a1a1aa;font-family:monospace;font-size:12px;"><span class="rowdot" style="background:{sc};"></span>{ts}</td>'
                 f'<td style="padding:13px 18px;font-weight:500;font-family:monospace;font-size:13px;">{r["suite_id"]}</td>'
+                f'<td style="padding:13px 18px;font-family:monospace;font-size:12px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{ep_cell}</td>'
                 f'<td style="padding:13px 18px;"><span class="sp {pill}">{status}</span></td>'
                 f'<td style="padding:13px 18px;">{_drift_bar(drift)}</td>'
                 f'<td style="padding:13px 18px;color:{reg_color};font-weight:600;font-size:13px;font-family:monospace;">{reg_count}</td>'
@@ -2293,7 +2303,7 @@ Don't ask about credit score, income, identity verification, or lending policy â
         ) if error else ""
 
         empty_row = (
-            '<tr><td colspan="6" style="padding:48px;text-align:center;color:#52525b;font-size:13px;">'
+            '<tr><td colspan="7" style="padding:48px;text-align:center;color:#52525b;font-size:13px;">'
             'No runs yet &nbsp;Â·&nbsp; '
             '<a href="/live" style="color:#f97316;font-weight:600;">â–¶ run the live demo</a>'
             ' &nbsp;or trigger from UiPath: <code style="color:#a1a1aa;">uipath run main.py \'{"suite_id":"shopease_refunds",â€¦}\'</code>'
@@ -2358,6 +2368,7 @@ Don't ask about credit score, income, identity verification, or lending policy â
         <tr style="border-bottom:1px solid var(--br);">
           <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Timestamp</th>
           <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Suite</th>
+          <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Agent Endpoint</th>
           <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Status</th>
           <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Drift</th>
           <th style="padding:11px 18px;font-size:10.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:1.2px;">Regressions</th>
@@ -2407,6 +2418,11 @@ Don't ask about credit score, income, identity verification, or lending policy â
         t_pass = sum(1 for r in results if r["overall_pass"])
         t_fail = t_total - t_pass
         n_contracts = sum(len(r.get("contract_evaluations", [])) for r in results)
+        agent_endpoint = run.get("agent_endpoint") or ""
+        endpoint_chip = (
+            f'<span class="chip">endpoint&nbsp; <b style="color:#f97316;">{agent_endpoint}</b></span>'
+            if agent_endpoint else ""
+        )
 
         verdict = {
             "PASSED": "All behavioral contracts satisfied. Safe to deploy.",
@@ -2499,6 +2515,7 @@ Don't ask about credit score, income, identity verification, or lending policy â
       <div class="rsub">{verdict}</div>
       <div class="rmeta">
         <span class="chip">suite&nbsp; <b>{run["suite_id"]}</b></span>
+        {endpoint_chip}
         <span class="chip">tests&nbsp; <b style="color:#22c55e;">{t_pass} pass</b> Â· <b style="color:#ef4444;">{t_fail} fail</b></span>
         <span class="chip">contracts&nbsp; <b>{n_contracts}</b></span>
         <span class="chip">regressions&nbsp; <b style="color:{'#ef4444' if reg_count else '#22c55e'};">{reg_count}</b></span>
