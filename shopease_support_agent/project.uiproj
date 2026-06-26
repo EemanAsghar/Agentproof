@@ -1,0 +1,6 @@
+{
+  "ProjectType": "Agent",
+  "Name": "shopease-support-agent",
+  "Description": "ShopEasy customer support agent \u2014 demo validation target for AgentProof",
+  "MainFile": null
+}
