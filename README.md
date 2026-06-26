@@ -26,7 +26,7 @@ A one-line change to a system prompt, a model upgrade, an MCP/tool update, or a 
 
 1. **Connect** — Sign in with your UiPath tenant. AgentProof discovers the agents published in your Orchestrator.
 2. **Describe** — Say what an agent *should* do in plain English. An LLM authors **behavioral contracts** (no JSON, no config).
-3. **Validate** — AgentProof runs each test scenario against the agent and uses an **LLM-as-judge** to score every contract (pass/fail + confidence + reasoning).
+3. **Validate** — AgentProof runs each test scenario against the agent — **natively as a real UiPath Orchestrator job**, or against an HTTP endpoint — and uses an **LLM-as-judge** to score every contract (pass/fail + confidence + reasoning).
 4. **Detect drift** — Results are compared to the last passing baseline. A **severity-weighted drift score** (critical ×3, high ×2, medium ×1, low ×0.5) produces a status: `PASSED` / `DEGRADED` / `FAILED`.
 5. **Gate the deployment** — `FAILED` ⇒ deployment blocked, regressions listed with LLM reasoning, alert fired, PDF report generated, results persisted to a per-tenant dashboard.
 
@@ -63,7 +63,8 @@ Developer / Orchestrator trigger
 |---|---|
 | **UiPath for Coding Agents (Claude Code)** | The entire solution — agent, engine, UI, integration — was built using Claude Code as the coding agent. *(Bonus-point criterion.)* |
 | **UiPath Coded Agents (Python SDK)** | AgentProof's validation engine (`main.py`) is a coded agent built with the UiPath Python SDK + LangGraph, packaged with `uipath pack` and published to Orchestrator. |
-| **UiPath Orchestrator** | Agents are published as packages/releases; AgentProof authenticates to the tenant and **discovers published agents** via the Orchestrator OData API. Sign-in identity = the UiPath tenant. |
+| **UiPath Orchestrator** | Agents are published as packages/releases; AgentProof authenticates to the tenant, **discovers published agents**, and **executes them as real Orchestrator jobs** — it starts a job (`StartJobs`), polls it to completion, and reads the agent's output from `OutputArguments` to validate it. Sign-in identity = the UiPath tenant. |
+| **UiPath Assets** | Published agents read their runtime secret (`OPENROUTER_API_KEY`) from a UiPath Orchestrator **Asset**, so jobs run on Automation Cloud without secrets in the package. |
 | **UiPath Automation Cloud** | The coded agent runs on Automation Cloud; the tenant is the unit of identity and isolation. |
 | **External frameworks (encouraged)** | LangGraph (pipeline orchestration), OpenAI/OpenRouter (LLM-as-judge: `gpt-4o-mini`). UiPath remains the orchestration/governance layer. |
 

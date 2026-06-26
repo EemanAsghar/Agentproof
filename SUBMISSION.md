@@ -52,9 +52,11 @@ External frameworks (encouraged): LangGraph, OpenAI/OpenRouter. UiPath is the or
 Behavioral regressions are invisible to humans but obvious to a judge with explicit contracts. Treating an agent release like a software release — baseline, diff, gate — is the missing primitive for enterprise AI.
 
 ### What's next
-- Native Orchestrator **job-invocation** so a discovered agent is validated by running it as a UiPath job (already integrated for HTTP-exposed agents).
 - Deeper **Test Cloud / Test Manager** integration (sync contracts as test cases, push results).
 - Enforced deployment gates in CI and Maestro flows; multi-model judge consensus.
+- Scheduled / triggered validation on every new package version.
+
+*(Native Orchestrator **job-invocation** is already built: AgentProof validates a discovered agent by running it as a real UiPath job and judging its output.)*
 
 ### Built with
 Python · LangGraph · UiPath Python SDK · UiPath Orchestrator · FastAPI · PostgreSQL (Neon) · OpenAI/OpenRouter · Claude Code (UiPath for Coding Agents)
@@ -74,8 +76,8 @@ Show the **AgentProof coded agent published in Orchestrator** and trigger a vali
 **1:10–2:10 — Native tenant discovery (the platform story).**
 On `/test`, **Connect UiPath tenant** → the dropdown fills with the agents published in the tenant (ShopEasy, Invoice, IT Helpdesk, HR, Loan). "AgentProof discovers every agent in your Orchestrator. Sign-in identity is your UiPath tenant."
 
-**2:10–3:30 — Catch a regression, live.**
-Pick **ShopEasy Support Agent** → description auto-fills → **Generate contracts** (AI writes them) → toggle to **Regressed build** → **Validate**. Watch the timeline stream, contracts fail with reasoning, drift climbs, **Deployment blocked**. Then flip to **Compliant build** → **Validate** → all green → **Safe to deploy**. "Same agent, two builds — AgentProof caught the regression before a customer ever saw it."
+**2:10–3:30 — Validate natively, as a real UiPath job (the platform moment).**
+Pick **ShopEasy Support Agent** → description auto-fills → **Generate contracts** (AI writes them) → tick **"⚡ Run natively as a UiPath Orchestrator job"** → **Validate**. The timeline shows **real job IDs going Running → Successful** — AgentProof is *executing the agent in Orchestrator* and judging its actual output. Then show a regression caught (toggle to the regressed build / HTTP mode for speed) → **Deployment blocked** → fix → **Safe to deploy**. "Same agent, two builds — and we validated it by actually running it on UiPath."
 
 **3:30–4:10 — Dashboard + governance.**
 Open the **per-tenant dashboard**: runs scoped to your tenant, drift history, the agent endpoint, click into a report with per-contract reasoning + confidence. Mention PDF report + alert.
