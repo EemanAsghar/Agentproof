@@ -1,99 +1,114 @@
 # AgentProof — 5-Minute Demo Script
 
 **Track 3: UiPath Test Cloud.** Read the **quoted** lines aloud; do the **[SHOW]** actions on screen.
-Target: **5:00 max.** Speak with energy in the first 15 seconds.
+Target **5:00**. Tone: a product keynote with a beginning, conflict, and resolution — not a feature tour.
+Rule of thumb: every spoken sentence either **builds suspense**, **explains why it matters**, or **lands business value**. Never narrate clicks.
 
 ---
 
-## ✅ Pre-flight checklist (before you hit record)
-- Browser at **1080p**, one window, bookmarks bar hidden, only the tabs you need.
-- **Tab 1:** `https://agentproof-opal.vercel.app`
-- **Tab 2:** UiPath Orchestrator, signed in, on **Shared → Automations → Jobs**.
-- **A fresh UiPath token** copied, ready to paste into `/test`.
-- **Pre-run one `agentproof` job** with `/v2/chat` so you already have a green **Successful** job with logs to show (jobs take ~45s — don't wait live on camera).
-- Your **editor / Claude Code** open for the 20-second "built with" clip.
-- 🔒 Never show `.env`, the token in plain text, or DevTools with a bearer token.
-- Use the **live URL** `agentproof-opal.vercel.app` everywhere.
+## ✅ Pre-flight checklist (before you record)
+- Browser at **1080p**, one window, bookmarks bar hidden.
+- **Tab 1 — Orchestrator:** signed in, on **Shared → Automations → Jobs**, with a **pre-run Successful `agentproof` job** ready (so the Logs are already there — never wait on a spinner on camera).
+- **Tab 2 — the experience:** `agentproof-opal.vercel.app/live` (the cinematic gate + recovery animation) and `/dashboard` open.
+- Your **editor / Claude Code** open for a 15-second "built with" clip.
+- 🔒 Never show `.env`, a token in plain text, or DevTools.
 
 ---
 
-## SCENE 1 — The problem (0:00–0:35)
-**[SHOW:** the landing page hero, or the `problem-value` diagram, or a one-line prompt diff.**]**
+## SCENE 1 — The hook (0:00–0:30)
+**[SHOW:** a one-line prompt change, or the `problem-value` graphic.**]**
 
-> "This is a one-line change to an AI agent's prompt — someone made it 'friendlier.' The agent still answers every customer, so nothing looks broken. But it has quietly stopped citing policy, started escalating simple refunds to a human, and gone off-script. In production, nobody notices — until a customer does.
-> Software teams have CI and tests to catch regressions. AI agent teams have a prompt, and hope. **That's the gap AgentProof closes.**"
+> "Someone makes an AI support agent a little *friendlier*. One line of text. It still answers every customer — so it ships.
+> What nobody sees is that it's quietly stopped following the rules. It's not citing policy. It's pushing simple refunds to a human. And the first person to find out… is a customer."
 
----
-
-## SCENE 2 — What it is + architecture (0:35–1:10)
-**[SHOW:** the `system-architecture` diagram.**]**
-
-> "AgentProof is the deployment gate for enterprise AI agents — continuous behavioral validation, built on the UiPath Platform.
-> AgentProof is itself a **UiPath coded agent**. It discovers the agents published in your Orchestrator, runs each one **natively — as a real UiPath job** — and scores its behavior against contracts using an LLM as a judge. If the behavior regressed, it **blocks the deployment**. UiPath is the execution layer; everything runs on Automation Cloud."
+*(Bridge ↓)*
+> "Software teams catch this with tests. AI teams don't have them."
 
 ---
 
-## SCENE 3 — It runs ON UiPath (1:10–2:15) — ⭐ THE MONEY SHOT
-**[SHOW:** Orchestrator → **Start Job** dialog for `agentproof` (type shows "Agent - python").**]**
+## SCENE 2 — The distinction (0:30–0:55)
+**[SHOW:** the `system-architecture` diagram — on screen only briefly.**]**
 
-> "Let me prove it. This is UiPath Orchestrator. I'm starting **AgentProof itself** as a job. I give it a test suite, and the agent I want to validate."
-
-**[SHOW:** set **Agent Endpoint** = `https://agentproof-opal.vercel.app/v2/chat`, click **Start**. Cut to your pre-run Successful job → open the **Logs** tab and scroll slowly.**]**
-
-> "Inside the job, AgentProof reads its API key from a **UiPath Asset**, calls the agent under test, and runs each response through the LLM judge. Watch the logs — *policy citation: fail… no-escalation: fail… professional tone: pass.* It's evaluating behavioral contracts **live, on the platform**, and UiPath is tracing every step."
-
-**[SHOW:** the job's **Output** tab.**]**
-
-> "And the verdict: **FAILED. Drift fifty-eight percent. Two critical regressions.** The orchestrator and the agent under test both ran on UiPath."
+> "That's AgentProof. And here's the one idea to remember: **traditional testing checks your code. AgentProof checks your AI's *behavior* — before it goes live.**
+> It runs where your agents already live — as a **UiPath coded agent, on UiPath Automation Cloud.** This isn't a mock-up. So let me show you the real thing."
 
 ---
 
-## SCENE 4 — Zero-config experience + catch a regression (2:15–3:25)
-**[SHOW:** `agentproof-opal.vercel.app/test` → **Connect UiPath tenant** → paste token → **Connect & discover**.**]**
+## SCENE 3 — Real, running on UiPath (0:55–2:15) ⭐ *the centerpiece*
+**[SHOW:** Orchestrator → start the `agentproof` job (type reads **Agent · python**). Then cut to the **Successful** job → **Logs** tab and scroll slowly.**]**
 
-> "That's the engine. Here's the experience. I connect my UiPath tenant — and AgentProof **discovers every agent published in my Orchestrator.**"
+> "This is UiPath Orchestrator. I'm putting that agent through AgentProof — as a real job, on the platform."
 
-**[SHOW:** the dropdown with the 6 agents; pick **ShopEasy Support Agent**; the description auto-fills.**]**
+**[Let the logs scroll. Slow down. Let the first lines breathe.]**
 
-> "I pick the ShopEasy support agent, describe what it *should* do in plain English, and **AI writes the behavioral contracts** — no test code, no JSON."
+> "Watch it work. It talks to the agent the way a real customer would, and it checks every response against what the agent is *supposed* to do.
+> The first behaviors look fine…"
 
-**[SHOW:** click **Generate contracts** → tick **⚡ Run natively as a UiPath job** → **Validate**. Timeline streams jobs Running → Successful, contracts fail with reasoning.**]**
+**[SHOW:** the first FAIL line appears.**]**
 
-> "I validate it — again, running it as a **real Orchestrator job** — and AgentProof catches three critical failures, each with the judge's reasoning. **Deployment: blocked.**"
+> "…and then they don't. Policy — missing. A simple refund — escalated to a human. One by one, it catches the agent breaking the rules, in its own words, live."
 
----
+**[SHOW:** the job's **Output** — `FAILED`.**]**
 
-## SCENE 5 — Human-in-the-loop, dashboard, report (3:25–4:05)
-**[SHOW:** flip the toggle to **Compliant build** (or endpoint `/v1/chat`) → **Validate** → all green → **Safe to deploy**.**]**
-
-> "The developer fixes the prompt, re-validates — all green. **Safe to deploy.** The gate keeps a human in control: AgentProof recommends, a person approves."
-
-**[SHOW:** the **Dashboard** — per-tenant runs, drift history, the agent endpoint column. Click into a run → the **report page**.**]**
-
-> "Every run is recorded on a **per-tenant dashboard**, and each opens a full report — every contract, pass or fail, with the LLM's reasoning and the agent's actual response. That's your audit trail before anything ships."
+> "These are real runs, on UiPath, right now — and the verdict is clear: **this agent is not safe to ship.**"
 
 ---
 
-## SCENE 6 — Built with Claude Code (bonus) (4:05–4:35)
-**[SHOW:** a quick clip of Claude Code / your editor building part of AgentProof.**]**
+## SCENE 4 — The gate (the climax) (2:15–2:50)
+**[SHOW:** the `/live` page at the deployment-gate moment — the hazard panels **slam shut: DEPLOYMENT BLOCKED.**]**
 
-> "One more thing. **Every layer of AgentProof** — the coded agent, the validation engine, the UiPath integration, the dashboard — was built using **Claude Code, through UiPath for Coding Agents.** Natural language to a production agentic system."
+**[Say nothing for ~3 seconds. Let the animation be the moment.]**
 
----
-
-## SCENE 7 — Close (4:35–5:00)
-**[SHOW:** landing page / tagline / the live URL on screen.**]**
-
-> "AgentProof brings CI/CD to enterprise AI — validate behavior before deployment, catch regressions automatically, and stop broken agents from ever reaching production. **Every agent passes through the gate before it ships.** Thanks for watching."
+> "Blocked. The broken agent never reaches a single customer."
 
 ---
 
-## Recording tips
-- **Record in segments**, not one take — re-do any fumble and stitch later.
-- Narrate the **why**, not the clicks ("AgentProof is now executing the agent inside Orchestrator"), not ("I click validate").
-- For Scene 3, the **Logs tab with PASS/FAIL lines** is the most convincing 30 seconds in the whole video — linger there.
-- If a live job is slow, cut to the pre-run Successful job. Never wait on a spinner on camera.
-- End on the live URL so judges can try it.
+## SCENE 5 — The recovery (2:50–3:50) *the resolution*
+**[SHOW:** the fix — revert the one line / switch to the compliant build.**]**
+
+> "So the developer fixes the one line that started all this."
+
+**[SHOW:** re-validation runs — checks turn green, one after another — ending on **SAFE TO DEPLOY**. Let it land.**]**
+
+> "And runs it again. This time, every behavior passes.
+> *(beat)* Safe to deploy.
+> Caught, fixed, and shipped — with confidence — in under a minute. That's the whole point: the bad version never made it out, and the good one shipped without slowing anyone down."
+
+---
+
+## SCENE 6 — Trust at scale (3:50–4:15)
+**[SHOW:** the **dashboard**, then click a run → the **report**.**]**
+
+> "And none of it is taken on faith. Every check is on the record — what was tested, what passed, what failed, and why — so a human makes the final call with the full picture. AgentProof does this for **every agent in your tenant**, automatically."
+
+---
+
+## SCENE 7 — Built with Claude Code (4:15–4:40)
+**[SHOW:** a quick clip of Claude Code building part of AgentProof.**]**
+
+> "One last thing. All of this — the agent, the engine, the platform integration — was built with **Claude Code, through UiPath for Coding Agents.** Described in plain English; running in production."
+
+---
+
+## SCENE 8 — Close (4:40–5:00)
+**[SHOW:** the tagline and the live URL on screen.**]**
+
+> "Enterprises are shipping AI agents faster than they can trust them. AgentProof is the gate that makes them trustworthy — catching broken behavior before it ever reaches a customer.
+> **Every agent, through the gate, before it ships.**"
+
+---
+
+## Pacing map (something visual every ~25s)
+| Time | Beat | Emotional note |
+|---|---|---|
+| 0:00 | The silent regression | tension opens |
+| 0:30 | "Tests check code; AgentProof checks behavior" | the core idea |
+| 0:55 | Real job on UiPath, logs going green→red | rising tension ⭐ |
+| 2:15 | Gate slams: BLOCKED | climax |
+| 2:50 | Fix → re-run → SAFE TO DEPLOY | relief / resolution |
+| 3:50 | Dashboard + report | trust |
+| 4:15 | Built with Claude Code | bonus |
+| 4:40 | "Through the gate, before it ships" | confident close |
 
 ## Inputs cheat-sheet
 | Field | Value |
@@ -101,3 +116,9 @@ Target: **5:00 max.** Speak with energy in the first 15 seconds.
 | Suite Id | `aria_customer_support` |
 | Agent Endpoint (FAIL) | `https://agentproof-opal.vercel.app/v2/chat` |
 | Agent Endpoint (PASS) | `https://agentproof-opal.vercel.app/v1/chat` |
+
+## Delivery notes
+- **Build tension by slowing down**, not speeding up — pauses sell the gate and the recovery.
+- During the gate animation and the "SAFE TO DEPLOY" reveal, **stop talking** and let the visuals carry it.
+- Say *why*, never *what you clicked*. "It's checking the agent's behavior," not "I'm clicking validate."
+- Record in segments and stitch; re-do any fumble.
