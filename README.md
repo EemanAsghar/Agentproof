@@ -122,7 +122,7 @@ UiPath Automation Cloud is the **execution layer**; the web application is only 
 <img src="docs/system-architecture.png" alt="AgentProof system architecture" width="92%"/>
 </div>
 
-> **Verified live —** the ShopEasy and IT Helpdesk agents were executed as Orchestrator jobs (state `Successful`) and judged on their actual output. Five demo agents are published to a real tenant and validate end to end.
+> **Verified live —** target agents (ShopEasy, IT Helpdesk, …) execute as Orchestrator jobs and are judged on their actual output. **AgentProof's own validation engine also runs as an Orchestrator job** — a real run completed `Successful` with `status=FAILED`, `drift=58.8%`, and results written to Postgres, entirely on UiPath. Both the orchestrator and the agents under test run on the platform.
 
 <br/>
 
