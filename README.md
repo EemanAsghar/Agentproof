@@ -42,9 +42,28 @@ AgentProof brings CI/CD discipline to AI agents. It expresses expected behavior 
 
 AgentProof is built and run **on the UiPath Platform**: the validation engine is a UiPath coded agent, and the agents it validates are executed as real UiPath Orchestrator jobs.
 
-![Problem to value — the difference AgentProof makes](docs/problem-value.png)
+<div align="center">
+<img src="docs/problem-value.png" alt="Problem to value — the difference AgentProof makes" width="92%"/>
+</div>
 
 > **In one line —** AgentProof is continuous integration for agent *behavior*: it catches the regressions that still "reply correctly" but no longer act correctly.
+
+<br/>
+
+---
+
+<br/>
+
+## Key capabilities
+
+<div align="center">
+
+|  |  |  |
+|:--|:--|:--|
+| **Native UiPath coded agent** <br/> <sub>Runs and validates on Orchestrator</sub> | **AI-generated contracts** <br/> <sub>Behavior defined in plain English</sub> | **Regression & drift detection** <br/> <sub>Scored against a known-good baseline</sub> |
+| **Deployment gate** <br/> <sub>Blocks unsafe releases automatically</sub> | **Automated reports** <br/> <sub>Per-run PDF and audit trail</sub> | **Multi-tenant validation** <br/> <sub>Runs scoped per UiPath tenant</sub> |
+
+</div>
 
 <br/>
 
@@ -62,15 +81,29 @@ AgentProof is built and run **on the UiPath Platform**: the validation engine is
 | **4 · Detect drift** | Results are compared against the last passing baseline. A severity-weighted drift score yields `PASSED`, `DEGRADED`, or `FAILED`. |
 | **5 · Gate** | On `FAILED`, the deployment is blocked. Regressions are listed with reasoning, an alert is raised, a PDF report is generated, and the run is recorded on a per-tenant dashboard. |
 
-### Why it's different
+<br/>
+
+---
+
+<br/>
+<br/>
+
+## Why AgentProof is different
+
+Existing tools either assert on exact strings (and miss behavioral drift) or evaluate prompts in isolation (off-platform, with no deployment gate). **AgentProof validates behavior, on the platform, and turns the result into a release decision.**
+
+<div align="center">
 
 | Capability | Unit / integration tests | Prompt-eval tools | **AgentProof** |
 |:-----------|:----------------------:|:-----------------:|:--------------:|
-| Validates language-based behavior | ✗ | ✓ | ✓ |
-| Regression detection vs. a baseline | ✗ | partial | ✓ |
-| Executes on UiPath Orchestrator | ✗ | ✗ | ✓ |
-| Deployment gate + audit trail | ✗ | ✗ | ✓ |
+| Validates language-based behavior | ✗ | ✓ | **✓** |
+| Regression detection vs. a baseline | ✗ | partial | **✓** |
+| Executes on UiPath Orchestrator | ✗ | ✗ | **✓** |
+| Deployment gate + audit trail | ✗ | ✗ | **✓** |
 
+</div>
+
+<br/>
 <br/>
 
 ---
@@ -83,7 +116,11 @@ Most agent-testing tools call an HTTP endpoint. **AgentProof runs the agent on t
 
 UiPath Automation Cloud is the **execution layer**; the web application is only the **control plane**.
 
-![AgentProof system architecture](docs/system-architecture.png)
+> The diagram below shows how AgentProof orchestrates validation **natively through UiPath Automation Cloud**, with the web app acting purely as a control plane.
+
+<div align="center">
+<img src="docs/system-architecture.png" alt="AgentProof system architecture" width="92%"/>
+</div>
 
 > **Verified live —** the ShopEasy and IT Helpdesk agents were executed as Orchestrator jobs (state `Successful`) and judged on their actual output. Five demo agents are published to a real tenant and validate end to end.
 
@@ -112,15 +149,22 @@ UiPath Automation Cloud is the **execution layer**; the web application is only 
 
 ## Architecture
 
-A validation run proceeds from tenant connection through to the deployment gate:
+> The flow below demonstrates the **complete validation lifecycle** — from connecting a tenant, to running the agent as an Orchestrator job, to the final deployment decision.
 
-![AgentProof native validation flow](docs/native-validation-flow.png)
+<div align="center">
+<img src="docs/native-validation-flow.png" alt="AgentProof native validation flow" width="92%"/>
+</div>
 
 <br/>
+<br/>
 
-The validation engine is a **LangGraph coded agent** of six nodes. Each stage has an explicit input and output, so a run is fully traceable end to end:
+### The execution graph
 
-![Coded-agent pipeline (LangGraph)](docs/coded-agent-pipeline.png)
+> This is the internal **LangGraph execution graph** that powers every validation run — six nodes, each with an explicit input and output, so a run is fully traceable end to end.
+
+<div align="center">
+<img src="docs/coded-agent-pipeline.png" alt="Coded-agent pipeline (LangGraph)" width="100%"/>
+</div>
 
 | # | Node | Input | Output | Stack |
 |:-:|:-----|:------|:-------|:------|
@@ -230,6 +274,16 @@ CREATE INDEX idx_test_runs_tenant ON test_runs (tenant_id, timestamp DESC);
 ## Built with UiPath for Coding Agents
 
 Every layer of AgentProof — the LangGraph validation engine, the published coded agents, the Orchestrator REST integration, native job execution, per-tenant authentication, and the dashboard — was developed using **Claude Code via UiPath for Coding Agents**. The demo video includes the build process.
+
+<br/>
+
+---
+
+<br/>
+
+## The mission
+
+Enterprises are deploying AI agents faster than they can govern them. AgentProof brings **CI/CD principles to enterprise AI** — validating behavior before deployment, detecting regressions automatically, and preventing broken agents from ever reaching production. Quality becomes a gate, not a hope.
 
 <br/>
 
