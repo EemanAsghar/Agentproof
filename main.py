@@ -2,6 +2,7 @@ from typing import TypedDict, Optional
 from langgraph.graph import StateGraph, START, END
 from dotenv import load_dotenv
 from pydantic import BaseModel
+import os
 import asyncio
 import json
 
@@ -27,6 +28,7 @@ class Output(BaseModel):
     drift_score: float
     regressions_count: int
     run_id: str
+    report_url: str
     report_path: str
 
 
@@ -42,6 +44,7 @@ class AgentProofState(TypedDict):
     regressions: list
     status: str
     run_id: str
+    report_url: str
     report_path: str
 
 
@@ -138,10 +141,15 @@ def save_results(state: AgentProofState) -> AgentProofState:
 
 
 def generate_pdf_report(state: AgentProofState) -> AgentProofState:
+    # Link to the interactive HTML report (control panel)
+    base = os.getenv("AGENTPROOF_BASE_URL", "https://agentproof-opal.vercel.app").rstrip("/")
+    state["report_url"] = f"{base}/run/{state['run_id']}" if state.get("run_id") not in (None, "", "unsaved") else ""
+
+    # Render the report as HTML (no WeasyPrint) and attach it to this Orchestrator job
     try:
-        from agentproof.reporter import generate_report  # lazy: WeasyPrint optional
+        from agentproof.reporter import render_html_report
         suite = TestSuite(**state["suite"])
-        path = generate_report(
+        html = render_html_report(
             suite_id=state["suite_id"],
             agent_name=suite.agent_name,
             status=state["status"],
@@ -150,11 +158,24 @@ def generate_pdf_report(state: AgentProofState) -> AgentProofState:
             regressions=state["regressions"],
             run_id=state["run_id"],
         )
-        state["report_path"] = path
-        print(f"[generate_pdf_report] Report saved: {path}")
+        state["report_path"] = ""
+        try:
+            from uipath.platform import UiPath
+            job_key = (os.getenv("UIPATH_JOB_KEY") or os.getenv("UIPATH_JOB_ID")
+                       or os.getenv("UIPATH_PROCESS_UUID"))
+            UiPath().jobs.create_attachment(
+                name=f"agentproof-report-{state['run_id']}.html",
+                content=html.encode("utf-8"),
+                job_key=job_key,
+                category="AgentProof Report",
+            )
+            state["report_path"] = "attached-to-job"
+            print("[report] HTML report attached to the Orchestrator job")
+        except Exception as e:
+            print(f"[report] Job attachment skipped: {e}")
     except Exception as e:
         state["report_path"] = ""
-        print(f"[generate_pdf_report] Report skipped: {e}")
+        print(f"[report] Report render skipped: {e}")
     return state
 
 
@@ -232,6 +253,7 @@ async def main(input: Input) -> Output:
             "regressions": [],
             "status": "",
             "run_id": "",
+            "report_url": "",
             "report_path": "",
         }
     )
@@ -240,7 +262,8 @@ async def main(input: Input) -> Output:
         drift_score=result["drift_score"],
         regressions_count=len(result["regressions"]),
         run_id=result["run_id"],
-        report_path=result["report_path"],
+        report_url=result.get("report_url", ""),
+        report_path=result.get("report_path", ""),
     )
 
 
