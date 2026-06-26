@@ -570,6 +570,102 @@ Don't ask about credit score, income, identity verification, or lending policy �
         except Exception as e:
             return {"ok": False, "error": f"Could not reach Orchestrator: {e}"}
 
+    # ── Native execution: validate a UiPath agent by running it as an Orchestrator job
+    #    Split into start + poll so each serverless call stays short (no timeouts).
+    def _orch_headers(token: str, folder_id: str | None = None):
+        token = token.strip()
+        if token.lower().startswith("bearer "):
+            token = token[7:]
+        h = {"Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json"}
+        if folder_id:
+            h["X-UIPATH-OrganizationUnitId"] = str(folder_id)
+        return h
+
+    class StartJobReq(BaseModel):
+        base_url: str
+        token: str
+        release_key: str
+        folder_id: str
+        message: str
+
+    @app.post("/api/uipath/start-job")
+    async def uipath_start_job(req: StartJobReq):
+        import httpx
+        base = req.base_url.strip().rstrip("/")
+        body = {"startInfo": {
+            "ReleaseKey": req.release_key, "Strategy": "ModernJobsCount", "JobsCount": 1,
+            "InputArguments": json.dumps({"message": req.message}),
+        }}
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                r = await client.post(
+                    base + "/orchestrator_/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs",
+                    headers=_orch_headers(req.token, req.folder_id), json=body)
+            if r.status_code not in (200, 201):
+                return {"ok": False, "error": f"StartJobs failed ({r.status_code}): {r.text[:160]}"}
+            return {"ok": True, "job_id": r.json()["value"][0]["Id"]}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    class JobResultReq(BaseModel):
+        base_url: str
+        token: str
+        folder_id: str
+        job_id: int
+
+    @app.post("/api/uipath/job-result")
+    async def uipath_job_result(req: JobResultReq):
+        import httpx
+        base = req.base_url.strip().rstrip("/")
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                r = await client.get(
+                    base + f"/orchestrator_/odata/Jobs({req.job_id})",
+                    headers=_orch_headers(req.token, req.folder_id))
+            j = r.json()
+            state = j.get("State")
+            response = None
+            if state == "Successful":
+                oa = j.get("OutputArguments")
+                try:
+                    d = json.loads(oa) if isinstance(oa, str) else oa
+                    if isinstance(d, dict):
+                        response = (d.get("response") or d.get("message")
+                                    or next((v for v in d.values() if isinstance(v, str) and v.strip()), None))
+                    else:
+                        response = str(oa)
+                except Exception:
+                    response = str(oa)
+            return {"ok": True, "state": state, "response": response}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    class JudgeCaseReq(BaseModel):
+        test_case: dict
+        agent_response: str
+
+    @app.post("/api/judge-case")
+    async def judge_case(req: JudgeCaseReq):
+        """Judge a given agent response against a test case's contracts (used by native job flow)."""
+        try:
+            from agentproof.contracts import BehavioralContract
+            from agentproof.validator import evaluate_contracts, is_overall_pass
+            tc = req.test_case
+            contracts = [BehavioralContract(**c) for c in tc.get("contracts", [])]
+            evals = evaluate_contracts(tc["input"], req.agent_response, contracts)
+            return {
+                "ok": True, "test_id": tc.get("test_id"), "test_name": tc.get("name"),
+                "severity": tc.get("severity", "medium"), "agent_response": req.agent_response,
+                "overall_pass": is_overall_pass(evals, contracts),
+                "contract_evaluations": [
+                    {"contract_id": e.contract_id, "passed": e.passed,
+                     "confidence": round(e.confidence, 2), "reasoning": e.reasoning}
+                    for e in evals
+                ],
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def _status_color(status: str) -> str:
         return {"PASSED": "#22c55e", "DEGRADED": "#eab308", "FAILED": "#ef4444"}.get(status, "#71717a")
 
@@ -1960,9 +2056,16 @@ Don't ask about credit score, income, identity verification, or lending policy �
           <div class="tab" id="verBad" data-ver="regressed" style="font-size:12.5px;">⚠ Regressed build</div>
         </div>
       </div>
-      <div class="row">
-        <label>Agent runtime endpoint <span class="muted">(where AgentProof calls it)</span></label>
-        <input id="uipEndpoint" class="mono" placeholder="https://...  (job-invocation coming next)"/>
+      <div id="uipNativeRow" class="hidden" style="margin-bottom:14px;background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.22);border-radius:10px;padding:12px 14px;">
+        <label style="display:flex;align-items:center;gap:9px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13.5px;color:var(--t1);font-weight:600;">
+          <input type="checkbox" id="uipNative" style="width:auto;"/>
+          ⚡ Run natively as a UiPath Orchestrator job
+        </label>
+        <div class="muted" style="margin-top:6px;">Validate by actually executing the agent in your tenant (real job + output), instead of calling an HTTP endpoint. Slower, but fully native.</div>
+      </div>
+      <div class="row" id="uipEndpointRow">
+        <label>Agent runtime endpoint <span class="muted">(HTTP mode — where AgentProof calls it)</span></label>
+        <input id="uipEndpoint" class="mono" placeholder="https://your-agent/chat"/>
       </div>
       <div class="row">
         <label>What should this agent do? (plain English)</label>
@@ -2080,6 +2183,9 @@ Don't ask about credit score, income, identity verification, or lending policy �
 
   function applyAgent(i){
     var a = (window._uipAgents||[])[i]; if(!a) return;
+    window._curAgent = a;   // has key + folder_id for native job execution
+    // native row available whenever the discovered agent has a release key
+    $('uipNativeRow').classList.toggle('hidden', !a.key);
     var slug = slugify(a.name);
     var preset = (window._presets||{})[slug];
     if(preset){
@@ -2107,6 +2213,42 @@ Don't ask about credit score, income, identity verification, or lending policy �
   }
   $('verGood').onclick = function(){ setVer('good'); };
   $('verBad').onclick = function(){ setVer('regressed'); };
+
+  // native job mode: hide the HTTP endpoint field, validation runs as a real Orchestrator job
+  $('uipNative').onchange = function(){
+    window._nativeMode = this.checked;
+    $('uipEndpointRow').style.display = this.checked ? 'none' : '';
+  };
+  function nativeActive(){ return activeTab()==='uipath' && window._nativeMode && window._curAgent && window._curAgent.key; }
+
+  var napSleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+
+  // run ONE test case by actually executing the agent as a UiPath job, then judging it
+  async function runCaseNative(tc, row){
+    var a = window._curAgent;
+    var creds = { base_url:$('uipUrl').value.trim(), token:$('uipToken').value.trim(),
+                  folder_id:String(a.folder_id), release_key:a.key };
+    row.querySelector('.tid').textContent = 'starting UiPath job…';
+    var sj = await fetch('/api/uipath/start-job',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign({message:tc.input}, creds))}).then(function(r){return r.json();});
+    if(!sj.ok) return {ok:false, error:sj.error};
+    row.querySelector('.tid').textContent = 'job '+sj.job_id+' · running on UiPath…';
+    var resp=null, state=null;
+    for(var k=0;k<45;k++){
+      await napSleep(4000);
+      var jr = await fetch('/api/uipath/job-result',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({base_url:creds.base_url, token:creds.token, folder_id:creds.folder_id, job_id:sj.job_id})}).then(function(r){return r.json();});
+      if(!jr.ok){ return {ok:false, error:jr.error}; }
+      state=jr.state;
+      row.querySelector('.tid').textContent = 'job '+sj.job_id+' · '+state;
+      if(state==='Successful'){ resp=jr.response; break; }
+      if(state==='Faulted'||state==='Stopped'){ return {ok:false, error:'UiPath job '+state}; }
+    }
+    if(resp==null) return {ok:false, error:'job did not finish in time'};
+    var jc = await fetch('/api/judge-case',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({test_case:tc, agent_response:resp})}).then(function(r){return r.json();});
+    return jc;
+  }
 
   $('genBtn').onclick = generate;
   $('uipGenBtn').onclick = generate;
@@ -2166,16 +2308,23 @@ Don't ask about credit score, income, identity verification, or lending policy �
     $('step3').scrollIntoView({behavior:'smooth',block:'start'});
 
     var inp = getInputs();
-    window._lastEndpoint = inp.endpoint;
+    var native = nativeActive();
+    window._lastEndpoint = native ? ('uipath-job://'+(window._curAgent.name)) : inp.endpoint;
     var payloadBase = { endpoint:inp.endpoint, auth_header:inp.auth, input_field:inp.field };
+    if(native){ $('s3title').textContent='Validating natively — running real UiPath jobs…'; }
 
     for(var i=0;i<suite.length;i++){
       var tc = suite[i];
-      var row = addTi('run','Evaluating '+tc.name, 'calling your agent + LLM judge', true);
+      var row = addTi('run','Evaluating '+tc.name, native?'starting UiPath job…':'calling your agent + LLM judge', true);
       try{
-        var r = await fetch('/api/run-case',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(Object.assign({test_case:tc}, payloadBase))});
-        var j = await r.json();
+        var j;
+        if(native){
+          j = await runCaseNative(tc, row);
+        } else {
+          var r = await fetch('/api/run-case',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(Object.assign({test_case:tc}, payloadBase))});
+          j = await r.json();
+        }
         row.classList.remove('cur');
         if(!j.ok){
           row.querySelector('.tic').className='tic fail'; row.querySelector('.tic').textContent='✗';

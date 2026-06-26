@@ -7,11 +7,8 @@ human for simple refunds, not citing policy).
 
 import os
 
-from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
-
-load_dotenv()
 
 
 # ── UiPath required Input / Output models ──────────────────────────────────────
@@ -32,15 +29,32 @@ When things get tricky, offer to connect them with the support team.
 Keep replies conversational."""
 
 
-def _client() -> OpenAI:
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.environ["OPENROUTER_API_KEY"],
-    )
+def _api_key() -> str:
+    """Read the OpenRouter key from a UiPath Asset at runtime, falling back to env locally."""
+    try:
+        from uipath.platform import UiPath
+        sdk = UiPath()
+        try:
+            k = sdk.assets.retrieve_secret("OPENROUTER_API_KEY", folder_path="Shared")
+            if k:
+                return k
+        except Exception:
+            pass
+        try:
+            a = sdk.assets.retrieve("OPENROUTER_API_KEY", folder_path="Shared")
+            v = getattr(a, "value", None) or getattr(a, "string_value", None) or getattr(a, "StringValue", None)
+            if v:
+                return v
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return os.environ["OPENROUTER_API_KEY"]
 
 
 def main(input: Input) -> Output:
-    completion = _client().chat.completions.create(
+    client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=_api_key())
+    completion = client.chat.completions.create(
         model="openai/gpt-4o-mini",
         max_tokens=200,
         messages=[
@@ -52,5 +66,4 @@ def main(input: Input) -> Output:
 
 
 if __name__ == "__main__":
-    result = main(Input(message="I bought this jacket 3 weeks ago but it doesn't fit. Can I get a refund?"))
-    print(result.response)
+    print(main(Input(message="I bought this jacket 3 weeks ago but it doesn't fit. Can I get a refund?")).response)
