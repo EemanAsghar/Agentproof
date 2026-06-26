@@ -1,0 +1,7 @@
+[project]
+name = "hr-onboarding-agent"
+version = "0.1.0"
+description = "HR Onboarding Agent — demo agent published for AgentProof validation"
+authors = [{ name = "Eeman Asghar", email = "eemanasghar2@gmail.com" }]
+dependencies = ["openai>=1.30.0", "pydantic>=2.0.0", "python-dotenv>=1.0.0"]
+requires-python = ">=3.10"

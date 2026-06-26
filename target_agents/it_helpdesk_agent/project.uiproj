@@ -1,0 +1,6 @@
+{
+  "ProjectType": "Agent",
+  "Name": "it-helpdesk-agent",
+  "Description": "IT Helpdesk Agent \u2014 demo agent published for AgentProof validation",
+  "MainFile": null
+}

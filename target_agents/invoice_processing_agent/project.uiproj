@@ -1,0 +1,6 @@
+{
+  "ProjectType": "Agent",
+  "Name": "invoice-processing-agent",
+  "Description": "Invoice Processing Agent \u2014 demo agent published for AgentProof validation",
+  "MainFile": null
+}

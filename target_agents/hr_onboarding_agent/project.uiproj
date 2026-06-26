@@ -1,0 +1,6 @@
+{
+  "ProjectType": "Agent",
+  "Name": "hr-onboarding-agent",
+  "Description": "HR Onboarding Agent \u2014 demo agent published for AgentProof validation",
+  "MainFile": null
+}

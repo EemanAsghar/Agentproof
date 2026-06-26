@@ -1,0 +1,18 @@
+{
+  "$schema": "https://cloud.uipath.com/draft/2024-12/uipath",
+  "id": "5a2f0afa-01ff-4e0a-9bb9-8bce0d0ee273",
+  "runtimeOptions": {
+    "isConversational": false
+  },
+  "packOptions": {
+    "fileExtensionsIncluded": [],
+    "filesIncluded": [],
+    "filesExcluded": [],
+    "directoriesExcluded": [],
+    "includeUvLock": true
+  },
+  "functions": {},
+  "agents": {
+    "invoice_processing_agent": "main.py:main"
+  }
+}

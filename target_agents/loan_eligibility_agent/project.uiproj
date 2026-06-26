@@ -1,0 +1,6 @@
+{
+  "ProjectType": "Agent",
+  "Name": "loan-eligibility-agent",
+  "Description": "Loan Eligibility Agent \u2014 demo agent published for AgentProof validation",
+  "MainFile": null
+}

@@ -1,0 +1,63 @@
+{
+    "$schema": "https://cloud.uipath.com/draft/2024-12/entry-point",
+    "$id": "entry-points.json",
+    "entryPoints": [
+        {
+            "filePath": "hr_onboarding_agent",
+            "uniqueId": "bb6c0998-f363-41ab-89e2-6436e22c1d1c",
+            "type": "agent",
+            "input": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "title": "Message",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "message"
+                ],
+                "title": "Input"
+            },
+            "output": {
+                "type": "object",
+                "properties": {
+                    "response": {
+                        "title": "Response",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "response"
+                ],
+                "title": "Output"
+            },
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "main.py:32",
+                        "name": "main",
+                        "type": "function",
+                        "metadata": {
+                            "file": "main.py"
+                        }
+                    },
+                    {
+                        "id": "main.py:21",
+                        "name": "_client",
+                        "type": "function",
+                        "metadata": {
+                            "file": "main.py"
+                        }
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "main.py:32",
+                        "target": "main.py:21"
+                    }
+                ]
+            }
+        }
+    ]
+}
