@@ -53,20 +53,8 @@ A one-line prompt edit, a model upgrade, a tool/MCP change, or a knowledge-base 
 
 Most "agent testing" tools call an HTTP endpoint. **AgentProof actually runs your agent on the platform:**
 
-```
-Connect tenant ──► discover published agents ──► START a real Orchestrator job
-                                                        │  (StartJobs)
-                                                        ▼
-                                              agent executes on UiPath
-                                              Automation Cloud (reads its
-                                              API key from a UiPath Asset)
-                                                        │  poll → OutputArguments
-                                                        ▼
-                                     LLM-as-judge scores the agent's real output
-                                                        │
-                                                        ▼
-                                   drift score → PASS / FAIL → deployment gate
-```
+<img width="1600" height="1050" alt="image" src="https://github.com/user-attachments/assets/010be6c5-3fc2-44f5-b5be-4e1bec7a310f" />
+
 
 > ✅ **Verified live:** ShopEasy & IT Helpdesk agents ran as Orchestrator jobs (`Successful`) and were judged on their actual output. Five demo agents are published to a real tenant and validate end to end.
 
