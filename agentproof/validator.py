@@ -5,9 +5,10 @@ from .contracts import BehavioralContract, ContractEvaluation
 
 
 def _get_client() -> OpenAI:
+    from ._config import asset_or_env
     return OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=os.environ["OPENROUTER_API_KEY"],
+        api_key=asset_or_env("OPENROUTER_API_KEY"),
     )
 
 SYSTEM_PROMPT = """

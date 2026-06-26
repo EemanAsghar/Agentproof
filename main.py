@@ -11,8 +11,9 @@ from agentproof.contracts import TestSuite, TestResult
 from agentproof.runner import run_test_case
 from agentproof.validator import evaluate_contracts, is_overall_pass
 from agentproof.regression import compute_drift_score, get_status
-from agentproof.reporter import generate_report
 from agentproof.db import save_run, get_baseline
+# NOTE: agentproof.reporter (WeasyPrint) is imported lazily inside generate_pdf_report
+# so the agent runs on the UiPath runtime even when system PDF libs are unavailable.
 
 
 # ── UiPath required Input / Output models ──────────────────────────────────────
@@ -92,7 +93,11 @@ async def run_tests(state: AgentProofState) -> AgentProofState:
 
 
 def detect_regressions(state: AgentProofState) -> AgentProofState:
-    baseline = get_baseline(state["suite_id"])
+    try:
+        baseline = get_baseline(state["suite_id"])
+    except Exception as e:
+        print(f"[detect_regressions] Baseline lookup skipped (DB unavailable): {e}")
+        baseline = None
     state["baseline_results"] = baseline or []
 
     if not baseline:
@@ -114,32 +119,42 @@ def detect_regressions(state: AgentProofState) -> AgentProofState:
 
 
 def save_results(state: AgentProofState) -> AgentProofState:
-    run_id = save_run(
-        suite_id=state["suite_id"],
-        results=state["results"],
-        drift_score=state["drift_score"],
-        status=state["status"],
-        regressions=state["regressions"],
-        agent_endpoint=state.get("agent_endpoint"),
-    )
-    state["run_id"] = run_id
-    print(f"[save_results] Run saved: {run_id}")
+    try:
+        run_id = save_run(
+            suite_id=state["suite_id"],
+            results=state["results"],
+            drift_score=state["drift_score"],
+            status=state["status"],
+            regressions=state["regressions"],
+            agent_endpoint=state.get("agent_endpoint"),
+            tenant_id=state.get("tenant_id"),
+        )
+        state["run_id"] = run_id
+        print(f"[save_results] Run saved: {run_id}")
+    except Exception as e:
+        state["run_id"] = "unsaved"
+        print(f"[save_results] Save skipped (DB unavailable): {e}")
     return state
 
 
 def generate_pdf_report(state: AgentProofState) -> AgentProofState:
-    suite = TestSuite(**state["suite"])
-    path = generate_report(
-        suite_id=state["suite_id"],
-        agent_name=suite.agent_name,
-        status=state["status"],
-        drift_score=state["drift_score"],
-        results=state["results"],
-        regressions=state["regressions"],
-        run_id=state["run_id"],
-    )
-    state["report_path"] = path
-    print(f"[generate_pdf_report] Report saved: {path}")
+    try:
+        from agentproof.reporter import generate_report  # lazy: WeasyPrint optional
+        suite = TestSuite(**state["suite"])
+        path = generate_report(
+            suite_id=state["suite_id"],
+            agent_name=suite.agent_name,
+            status=state["status"],
+            drift_score=state["drift_score"],
+            results=state["results"],
+            regressions=state["regressions"],
+            run_id=state["run_id"],
+        )
+        state["report_path"] = path
+        print(f"[generate_pdf_report] Report saved: {path}")
+    except Exception as e:
+        state["report_path"] = ""
+        print(f"[generate_pdf_report] Report skipped: {e}")
     return state
 
 

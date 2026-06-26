@@ -35,3 +35,6 @@ build/
 # UiPath build artifacts
 .uipath/
 *.nupkg
+
+# Validator publish bundle (generated)
+agentproof_agent/

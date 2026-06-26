@@ -8,8 +8,9 @@ from .contracts import TestResult
 
 
 def get_connection():
+    from ._config import asset_or_env
     return psycopg2.connect(
-        os.environ["DATABASE_URL"],
+        asset_or_env("DATABASE_URL"),
         cursor_factory=psycopg2.extras.RealDictCursor,
     )
 
