@@ -35,6 +35,8 @@ Software teams have CI, unit tests, and deployment gates. **AI agent teams have 
 
 A one-line prompt edit, a model upgrade, a tool/MCP change, or a knowledge-base refresh can *silently* change what an agent does. The agent keeps replying, so humans don't notice — until a customer does. There is no test suite for **behavior**.
 
+![Problem to value — the difference AgentProof makes](docs/problem-value.png)
+
 ---
 
 ## ✅ What it does
@@ -51,10 +53,9 @@ A one-line prompt edit, a model upgrade, a tool/MCP change, or a knowledge-base 
 
 ## 🟠 What makes it *native* to UiPath
 
-Most "agent testing" tools call an HTTP endpoint. **AgentProof actually runs your agent on the platform:**
+Most "agent testing" tools call an HTTP endpoint. **AgentProof actually runs your agent on the platform** — it starts a real Orchestrator job, polls it to completion, and judges the agent's real output. UiPath Automation Cloud is the execution layer; the web app is just the control panel:
 
-<img width="1600" height="1050" alt="image" src="https://github.com/user-attachments/assets/010be6c5-3fc2-44f5-b5be-4e1bec7a310f" />
-
+![AgentProof System Architecture](docs/system-architecture.png)
 
 > ✅ **Verified live:** ShopEasy & IT Helpdesk agents ran as Orchestrator jobs (`Successful`) and were judged on their actual output. Five demo agents are published to a real tenant and validate end to end.
 
@@ -132,6 +133,14 @@ Each test case carries a severity (**critical ×3 · high ×2 · medium ×1 · l
 ---
 
 ## 🗂️ Architecture
+
+A validation run, step by step — from connecting your tenant to the deployment gate:
+
+![AgentProof Native Validation Flow](docs/native-validation-flow.png)
+
+The engine itself is a **LangGraph coded agent** — six nodes, end-to-end behavioral validation:
+
+![The Coded-Agent Pipeline (LangGraph)](docs/coded-agent-pipeline.png)
 
 ```
 main.py                  AgentProof coded agent — LangGraph pipeline (UiPath entry point)
