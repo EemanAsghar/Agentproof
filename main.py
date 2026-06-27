@@ -21,7 +21,10 @@ from agentproof.db import save_run, get_baseline
 
 class Input(BaseModel):
     suite_id: str
-    agent_endpoint: str
+    # Native path: validate a published UiPath agent by name (invoked as a real job).
+    target_agent: Optional[str] = None
+    # HTTP path: validate an agent exposed at an HTTP endpoint.
+    agent_endpoint: Optional[str] = None
 
 class Output(BaseModel):
     status: str
@@ -36,7 +39,8 @@ class Output(BaseModel):
 
 class AgentProofState(TypedDict):
     suite_id: str
-    agent_endpoint: str
+    agent_endpoint: Optional[str]
+    target_agent: Optional[str]
     suite: Optional[dict]
     results: list
     baseline_results: list
@@ -65,12 +69,19 @@ async def run_tests(state: AgentProofState) -> AgentProofState:
     suite = TestSuite(**state["suite"])
     results = []
 
+    target_agent = state.get("target_agent")
+    endpoint = state.get("agent_endpoint") or suite.agent_endpoint
+    mode = "UiPath job" if target_agent else "HTTP endpoint"
+    print(f"[run_tests] Validation mode: {mode}"
+          f"{' → ' + target_agent if target_agent else ' → ' + str(endpoint)}")
+
     for test_case in suite.test_cases:
         print(f"[run_tests] Running: {test_case.test_id}")
-        agent_response = await run_test_case(
-            test_case,
-            state["agent_endpoint"],
-        )
+        if target_agent:
+            from agentproof.runner import run_test_case_native
+            agent_response = await run_test_case_native(test_case, target_agent)
+        else:
+            agent_response = await run_test_case(test_case, endpoint)
         evaluations = evaluate_contracts(
             test_case.input,
             agent_response,
@@ -129,7 +140,8 @@ def save_results(state: AgentProofState) -> AgentProofState:
             drift_score=state["drift_score"],
             status=state["status"],
             regressions=state["regressions"],
-            agent_endpoint=state.get("agent_endpoint"),
+            agent_endpoint=(state.get("agent_endpoint")
+                            or (f"uipath-job://{state['target_agent']}" if state.get("target_agent") else None)),
             tenant_id=state.get("tenant_id"),
         )
         state["run_id"] = run_id
@@ -246,6 +258,7 @@ async def main(input: Input) -> Output:
         {
             "suite_id": input.suite_id,
             "agent_endpoint": input.agent_endpoint,
+            "target_agent": input.target_agent,
             "suite": None,
             "results": [],
             "baseline_results": [],
