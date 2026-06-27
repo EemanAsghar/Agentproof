@@ -112,11 +112,24 @@ Rule of thumb: every spoken sentence either **builds suspense**, **explains why 
 | 4:40 | "Through the gate, before it ships" | confident close |
 
 ## Inputs cheat-sheet
+**Native — fully on UiPath (strongest; pre-run it, ~3–4 min):** in Start Job, set
+| Field | Value |
+|---|---|
+| Suite Id | `aria_customer_support` |
+| Target Agent | `ShopEasy Support Agent` |
+
+→ AgentProof invokes that agent as **real UiPath jobs** and judges them — no external endpoints.
+
+**HTTP — fast (good for live clicks):**
 | Field | Value |
 |---|---|
 | Suite Id | `aria_customer_support` |
 | Agent Endpoint (FAIL) | `https://agentproof-opal.vercel.app/v2/chat` |
 | Agent Endpoint (PASS) | `https://agentproof-opal.vercel.app/v1/chat` |
+
+## ⭐ The "everything runs on UiPath" proof shot
+After a **native** run, open Orchestrator → **Jobs**. You'll see **one `agentproof` job and five `ShopEasy Support Agent` jobs — all `Agent · python`, all Successful.** That single screen proves the validator *and* the agents under test all ran on UiPath. Say:
+> "AgentProof didn't call an API — it ran the agent **as a job on UiPath**, five times, and judged every answer. The tester and the tested both live on the platform."
 
 ## Delivery notes
 - **Build tension by slowing down**, not speeding up — pauses sell the gate and the recovery.
