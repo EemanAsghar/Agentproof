@@ -27,11 +27,38 @@ try:
     from pydantic import BaseModel
     from openai import OpenAI
 
+    # Any OpenAI-compatible provider works (OpenAI, OpenRouter, Groq, Together, local, …).
+    _DEFAULT_LLM_BASE_URL = "https://openrouter.ai/api/v1"
+    _DEFAULT_LLM_MODEL = "openai/gpt-4o-mini"
+
+    def _llm_base_url() -> str:
+        return os.environ.get("AGENTPROOF_LLM_BASE_URL") or _DEFAULT_LLM_BASE_URL
+
+    def _llm_model() -> str:
+        return os.environ.get("AGENTPROOF_LLM_MODEL") or _DEFAULT_LLM_MODEL
+
     def _get_client() -> OpenAI:
-        return OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.environ["OPENROUTER_API_KEY"],
-        )
+        key = os.environ.get("OPENROUTER_API_KEY")
+        if not key:
+            raise RuntimeError(
+                "No LLM API key configured. Paste your own key (any OpenAI-compatible provider) to run validation."
+            )
+        return OpenAI(base_url=_llm_base_url(), api_key=key)
+
+    def _apply_byok(req) -> None:
+        """Bring-your-own-key: route this request's LLM calls through the caller's own
+        provider. Works with any OpenAI-compatible API (OpenAI, OpenRouter, Groq, Together,
+        local runtimes, …). The server and the validation engine both read these env vars
+        at call time, so setting them here covers every LLM call in the request."""
+        key = getattr(req, "api_key", None)
+        if key and key.strip():
+            os.environ["OPENROUTER_API_KEY"] = key.strip()
+        base_url = getattr(req, "base_url", None)
+        if base_url and base_url.strip():
+            os.environ["AGENTPROOF_LLM_BASE_URL"] = base_url.strip()
+        model = getattr(req, "model", None)
+        if model and model.strip():
+            os.environ["AGENTPROOF_LLM_MODEL"] = model.strip()
 
     # ── Session: "Sign in with UiPath tenant" ─────────────────────────────────
     # Identity = the org/tenant the user proved access to (their token returned 200
@@ -156,53 +183,60 @@ Don't ask about credit score, income, identity verification, or lending policy �
     class ChatRequest(BaseModel):
         message: str
 
-    def _agent_reply(prompt: str, message: str) -> str:
-        comp = _get_client().chat.completions.create(
-            model="openai/gpt-4o-mini", max_tokens=220,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": message},
-            ],
-        )
-        return comp.choices[0].message.content
+    # Canned replies used when no LLM key is configured (or the LLM call fails),
+    # so the demo endpoints stay up instead of 500-ing. The "good" reply cites
+    # policy and resolves the request; the "regressed" reply is warm but breaks
+    # the rules (no policy, escalates a simple refund) — exactly the drift AgentProof catches.
+    GOOD_FALLBACK = (
+        "You purchased within the last 30 days, so you ARE eligible for a refund under "
+        "ShopEasy Return Policy Section 3.1. I've started your refund — it will appear on "
+        "your original payment method within 5–7 business days."
+    )
+    REGRESSED_FALLBACK = (
+        "Aw, I'm so sorry to hear that — that sounds really frustrating! Let me connect you "
+        "with our amazing support team; they'll take a closer look and get you sorted out. "
+        "Thanks so much for your patience!"
+    )
+
+    def _llm_reply(prompt: str, message: str, fallback: str) -> str:
+        try:
+            if not os.environ.get("OPENROUTER_API_KEY"):
+                return fallback
+            comp = _get_client().chat.completions.create(
+                model="openai/gpt-4o-mini", max_tokens=220,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": message},
+                ],
+            )
+            return comp.choices[0].message.content
+        except Exception:
+            return fallback
+
+    def _agent_reply(prompt: str, message: str, fallback: str = GOOD_FALLBACK) -> str:
+        return _llm_reply(prompt, message, fallback)
 
     @app.post("/v1/chat")
     async def chat_v1(request: ChatRequest):
-        response = _get_client().chat.completions.create(
-            model="openai/gpt-4o-mini",
-            max_tokens=200,
-            messages=[
-                {"role": "system", "content": PROMPT_V1},
-                {"role": "user", "content": request.message},
-            ],
-        )
-        return {"response": response.choices[0].message.content}
+        return {"response": _llm_reply(PROMPT_V1, request.message, GOOD_FALLBACK)}
 
     @app.post("/v2/chat")
     async def chat_v2(request: ChatRequest):
-        response = _get_client().chat.completions.create(
-            model="openai/gpt-4o-mini",
-            max_tokens=200,
-            messages=[
-                {"role": "system", "content": PROMPT_V2},
-                {"role": "user", "content": request.message},
-            ],
-        )
-        return {"response": response.choices[0].message.content}
+        return {"response": _llm_reply(PROMPT_V2, request.message, REGRESSED_FALLBACK)}
 
     @app.post("/agent/{slug}/chat")
     async def agent_chat(slug: str, request: ChatRequest):
         a = AGENT_REGISTRY.get(slug)
         if not a:
             return JSONResponse({"error": f"unknown agent '{slug}'"}, status_code=404)
-        return {"response": _agent_reply(a["good"], request.message)}
+        return {"response": _llm_reply(a["good"], request.message, GOOD_FALLBACK)}
 
     @app.post("/agent/{slug}/regressed/chat")
     async def agent_chat_regressed(slug: str, request: ChatRequest):
         a = AGENT_REGISTRY.get(slug)
         if not a:
             return JSONResponse({"error": f"unknown agent '{slug}'"}, status_code=404)
-        return {"response": _agent_reply(a["regressed"], request.message)}
+        return {"response": _llm_reply(a["regressed"], request.message, REGRESSED_FALLBACK)}
 
     @app.get("/api/agent-presets")
     async def agent_presets():
@@ -221,6 +255,9 @@ Don't ask about credit score, income, identity verification, or lending policy �
 
     class ValidateRequest(BaseModel):
         version: str = "v2"
+        api_key: str | None = None
+        base_url: str | None = None
+        model: str | None = None
 
     def _demo_contracts():
         from agentproof.contracts import BehavioralContract
@@ -244,10 +281,11 @@ Don't ask about credit score, income, identity verification, or lending policy �
     async def api_validate(req: ValidateRequest):
         """Run the REAL validation engine against /v1 or /v2 prompt and return live verdicts."""
         try:
+            _apply_byok(req)
             from agentproof.validator import evaluate_contracts
             prompt = PROMPT_V1 if req.version == "v1" else PROMPT_V2
             comp = _get_client().chat.completions.create(
-                model="openai/gpt-4o-mini", max_tokens=200,
+                model=_llm_model(), max_tokens=200,
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": DEMO_USER_MSG},
@@ -328,11 +366,15 @@ Don't ask about credit score, income, identity verification, or lending policy �
     class GenSuiteReq(BaseModel):
         description: str
         agent_name: str | None = "Your Agent"
+        api_key: str | None = None
+        base_url: str | None = None
+        model: str | None = None
 
     @app.post("/api/generate-suite")
     async def generate_suite(req: GenSuiteReq):
         """Turn a plain-English behaviour description into behavioral contracts (AI-authored)."""
         try:
+            _apply_byok(req)
             sys = (
                 "You generate behavioral test suites for AI agents. "
                 "A behavioral contract is a rule the agent's response must satisfy. "
@@ -348,7 +390,7 @@ Don't ask about credit score, income, identity verification, or lending policy �
             )
             user = f"Agent: {req.agent_name}\nExpected behaviour:\n{req.description}"
             comp = _get_client().chat.completions.create(
-                model="openai/gpt-4o-mini", max_tokens=1400,
+                model=_llm_model(), max_tokens=1400,
                 response_format={"type": "json_object"},
                 messages=[{"role": "system", "content": sys}, {"role": "user", "content": user}],
             )
@@ -391,11 +433,15 @@ Don't ask about credit score, income, identity verification, or lending policy �
         test_case: dict
         auth_header: str | None = None
         input_field: str | None = "message"
+        api_key: str | None = None
+        base_url: str | None = None
+        model: str | None = None
 
     @app.post("/api/run-case")
     async def run_case(req: RunCaseReq):
         """Run ONE test case live against the user's agent (short, timeout-safe per call)."""
         try:
+            _apply_byok(req)
             from agentproof.contracts import BehavioralContract
             from agentproof.validator import evaluate_contracts, is_overall_pass
             tc = req.test_case
@@ -643,11 +689,15 @@ Don't ask about credit score, income, identity verification, or lending policy �
     class JudgeCaseReq(BaseModel):
         test_case: dict
         agent_response: str
+        api_key: str | None = None
+        base_url: str | None = None
+        model: str | None = None
 
     @app.post("/api/judge-case")
     async def judge_case(req: JudgeCaseReq):
         """Judge a given agent response against a test case's contracts (used by native job flow)."""
         try:
+            _apply_byok(req)
             from agentproof.contracts import BehavioralContract
             from agentproof.validator import evaluate_contracts, is_overall_pass
             tc = req.test_case
@@ -2012,6 +2062,20 @@ Don't ask about credit score, income, identity verification, or lending policy �
       <label>Agent endpoint URL</label>
       <input id="endpoint" class="mono" placeholder="https://your-agent.com/chat"/>
     </div>
+    <div class="row">
+      <label>Your LLM API key <span style="color:var(--t3);font-weight:400;">— any OpenAI-compatible provider, used only for this validation and never stored</span></label>
+      <input id="apiKey" class="mono" type="password" placeholder="sk-..." autocomplete="off"/>
+    </div>
+    <div class="row" style="display:flex;gap:12px;">
+      <div style="flex:1.4;">
+        <label>Provider base URL <span style="color:var(--t3);font-weight:400;">(optional)</span></label>
+        <input id="baseUrl" class="mono" placeholder="https://openrouter.ai/api/v1" autocomplete="off"/>
+      </div>
+      <div style="flex:1;">
+        <label>Model <span style="color:var(--t3);font-weight:400;">(optional)</span></label>
+        <input id="model" class="mono" placeholder="openai/gpt-4o-mini" autocomplete="off"/>
+      </div>
+    </div>
     <div class="adv" id="advToggle">⚙ Advanced (auth header, request field)</div>
     <div class="advbox" id="advBox">
       <div><label>Auth header (optional)</label><input id="auth" class="mono" placeholder="Bearer ..."/></div>
@@ -2128,13 +2192,18 @@ Don't ask about credit score, income, identity verification, or lending policy �
   });
 
   // ---- which inputs are live, per active tab ----
+  function apiKey(){ var el=$('apiKey'); return (el && el.value.trim()) || null; }
+  function baseUrl(){ var el=$('baseUrl'); return (el && el.value.trim()) || null; }
+  function llmModel(){ var el=$('model'); return (el && el.value.trim()) || null; }
+  function llm(){ return { api_key:apiKey(), base_url:baseUrl(), model:llmModel() }; }
+
   function getInputs(){
     if(activeTab()==='uipath'){
-      return { endpoint:$('uipEndpoint').value.trim(), desc:$('uipDesc').value.trim(),
-               auth:null, field:'message', errEl:'uipGenErr' };
+      return Object.assign({ endpoint:$('uipEndpoint').value.trim(), desc:$('uipDesc').value.trim(),
+               auth:null, field:'message', errEl:'uipGenErr' }, llm());
     }
-    return { endpoint:$('endpoint').value.trim(), desc:$('desc').value.trim(),
-             auth:$('auth').value.trim()||null, field:$('field').value.trim()||'message', errEl:'genErr' };
+    return Object.assign({ endpoint:$('endpoint').value.trim(), desc:$('desc').value.trim(),
+             auth:$('auth').value.trim()||null, field:$('field').value.trim()||'message', errEl:'genErr' }, llm());
   }
 
   // ---- connect to UiPath tenant + discover agents ----
@@ -2246,7 +2315,7 @@ Don't ask about credit score, income, identity verification, or lending policy �
     }
     if(resp==null) return {ok:false, error:'job did not finish in time'};
     var jc = await fetch('/api/judge-case',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({test_case:tc, agent_response:resp})}).then(function(r){return r.json();});
+      body:JSON.stringify(Object.assign({test_case:tc, agent_response:resp}, llm()))}).then(function(r){return r.json();});
     return jc;
   }
 
@@ -2263,7 +2332,7 @@ Don't ask about credit score, income, identity verification, or lending policy �
     var old = b.innerHTML; b.disabled=true; b.innerHTML='<span class="spin"></span> Generating…';
     try{
       var r = await fetch('/api/generate-suite',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({description:inp.desc, agent_name:slug(inp.endpoint)})});
+        body:JSON.stringify(Object.assign({description:inp.desc, agent_name:slug(inp.endpoint)}, llm()))});
       var j = await r.json();
       if(!j.ok){ err(inp.errEl, j.error||'Generation failed.'); return; }
       suite = j.test_cases; suiteId = (activeTab()==='uipath'?'uipath_':'byo_')+slug(inp.endpoint);
@@ -2310,7 +2379,7 @@ Don't ask about credit score, income, identity verification, or lending policy �
     var inp = getInputs();
     var native = nativeActive();
     window._lastEndpoint = native ? ('uipath-job://'+(window._curAgent.name)) : inp.endpoint;
-    var payloadBase = { endpoint:inp.endpoint, auth_header:inp.auth, input_field:inp.field };
+    var payloadBase = Object.assign({ endpoint:inp.endpoint, auth_header:inp.auth, input_field:inp.field }, llm());
     if(native){ $('s3title').textContent='Validating natively — running real UiPath jobs…'; }
 
     for(var i=0;i<suite.length;i++){

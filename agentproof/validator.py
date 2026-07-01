@@ -4,12 +4,23 @@ from openai import OpenAI
 from .contracts import BehavioralContract, ContractEvaluation
 
 
+# Any OpenAI-compatible provider works (OpenAI, OpenRouter, Groq, Together, local, …).
+# Base URL and model are overridable via env so a bring-your-own-key request can
+# route the whole engine through the caller's own provider.
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_MODEL = "openai/gpt-4o-mini"
+
+
 def _get_client() -> OpenAI:
     from ._config import asset_or_env
     return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
+        base_url=os.environ.get("AGENTPROOF_LLM_BASE_URL") or DEFAULT_BASE_URL,
         api_key=asset_or_env("OPENROUTER_API_KEY"),
     )
+
+
+def _model() -> str:
+    return os.environ.get("AGENTPROOF_LLM_MODEL") or DEFAULT_MODEL
 
 SYSTEM_PROMPT = """
 You are a behavioral contract evaluator for AI agents.
@@ -63,7 +74,7 @@ Contracts:
 """
 
     response = _get_client().chat.completions.create(
-        model="openai/gpt-4o-mini",
+        model=_model(),
         max_tokens=1000,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
