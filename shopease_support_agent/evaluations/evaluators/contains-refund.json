@@ -1,0 +1,14 @@
+{
+  "id": "contains-refund-policy",
+  "version": "1.0",
+  "evaluatorTypeId": "uipath-contains",
+  "name": "Addresses refund",
+  "description": "The reply must actually address the refund request",
+  "evaluatorConfig": {
+    "name": "Addresses refund",
+    "description": "The reply must actually address the refund request",
+    "target_output_key": "response",
+    "case_sensitive": false,
+    "negated": false
+  }
+}

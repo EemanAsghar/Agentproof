@@ -1,0 +1,15 @@
+{
+  "id": "judge-behavior-similarity",
+  "version": "1.0",
+  "evaluatorTypeId": "uipath-llm-judge-output-semantic-similarity",
+  "name": "Behaves as expected (LLM judge)",
+  "description": "An LLM judges whether the agent's reply is semantically equivalent to the expected behavior.",
+  "evaluatorConfig": {
+    "name": "Behaves as expected (LLM judge)",
+    "description": "An LLM judges whether the agent's reply matches the expected behavior.",
+    "prompt": "As an expert evaluator of customer-support behavior, score from 0-100 how well the agent's reply matches the expected behavior. Reward replies that follow policy and meet the customer's intent; penalize replies that ignore policy, give wrong information, or fail to address the request. Provide a brief justification.\n----\nExpectedBehavior:\n{{ExpectedOutput}}\n----\nActualReply:\n{{ActualOutput}}",
+    "target_output_key": "response",
+    "model": "gpt-4.1-mini-2025-04-14",
+    "temperature": 0.0
+  }
+}

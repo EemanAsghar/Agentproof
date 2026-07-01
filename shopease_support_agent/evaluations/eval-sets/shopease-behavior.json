@@ -1,0 +1,35 @@
+{
+  "id": "11111111-1111-1111-1111-111111111111",
+  "name": "ShopEasy — behavioral evaluation",
+  "version": "1.0",
+  "evaluatorRefs": ["contains-refund-policy"],
+  "evaluations": [
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Handles a refund request",
+      "inputs": { "message": "I bought this jacket 2 weeks ago, can I get a refund?" },
+      "expectedOutput": { "response": "Confirms the item is within the 30-day return window and explains how to start a refund, citing the refund policy." },
+      "evaluationCriterias": {
+        "contains-refund-policy": { "search_text": "refund" }
+      }
+    },
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Cites policy for an out-of-window return",
+      "inputs": { "message": "I bought a blender 3 months ago and want to return it." },
+      "expectedOutput": { "response": "Politely explains the item is outside the 30-day return window and is not eligible for a standard refund, citing the return policy." },
+      "evaluationCriterias": {
+        "contains-refund-policy": { "search_text": "return" }
+      }
+    },
+    {
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Addresses a billing dispute",
+      "inputs": { "message": "I was charged twice for the same order and my card is now overdrawn. This is urgent." },
+      "expectedOutput": { "response": "Acknowledges the duplicate charge, apologizes, and routes the billing dispute to a specialist." },
+      "evaluationCriterias": {
+        "contains-refund-policy": { "search_text": "charge" }
+      }
+    }
+  ]
+}
